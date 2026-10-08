@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapo Home</title>
+<style>
+  :root {
+    --bg: #f4f3ef; --card: #fff; --ink: #1d1d1b; --muted: #77756f; --line: #e4e2dc;
+    --on: #f2a516; --on-soft: #fdf1d8; --ok: #2f9e61; --bad: #d4483b; --accent: #2b5fd9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141413; --card: #1f1f1d; --ink: #f0efe9; --muted: #96948d; --line: #2e2e2b;
+            --on-soft: #3a2d10; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           padding: 20px 20px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.live { background: var(--ok); }
+  .actions { display: flex; gap: 8px; }
+  button.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px;
+               border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer; }
+  button.btn:hover { border-color: var(--muted); }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 20px 40px; display: grid;
+         grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       margin: 20px 0 10px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+          display: flex; flex-direction: column; gap: 10px; transition: background .2s, border-color .2s; }
+  .card.on { background: var(--on-soft); border-color: var(--on); }
+  .card.offline { opacity: .55; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .switch { position: relative; width: 44px; height: 26px; flex: none; border: 0; border-radius: 999px;
+            background: var(--line); cursor: pointer; transition: background .2s; padding: 0; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+                   border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px #0003; }
+  .switch.on { background: var(--on); }
+  .switch.on::after { transform: translateX(18px); }
+  .switch:disabled { cursor: default; opacity: .5; }
+  input[type=range] { width: 100%; accent-color: var(--on); }
+  .sensors { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; background: var(--bg); border-radius: 6px; padding: 3px 7px; color: var(--muted); }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .hub { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+  .hub .grid { margin-top: 12px; }
+  .hub .card { background: var(--bg); }
+  .hub .card.on { background: var(--on-soft); }
+  .err { font-size: 12px; color: var(--bad); }
+  .flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { box-shadow: 0 0 0 3px var(--accent); } to { box-shadow: 0 0 0 0 transparent; } }
+  aside .feed { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 14px; }
+  .ev { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .ev:last-child { border: 0; }
+  .empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
+  @media (min-width: 640px) { .wide { grid-column: span 2; } }
+  .appl .state { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--bg); color: var(--muted); }
+  .appl.running .state { background: var(--on); color: #1d1d1b; }
+  .appl.paused .state { background: var(--line); color: var(--ink); }
+  .appl .big { font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+  .bar { height: 6px; border-radius: 999px; background: var(--bg); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--on); border-radius: 999px; transition: width .4s; }
+  .cams { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .cam { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .cam .frame { position: relative; aspect-ratio: 16 / 9; background: #000; cursor: zoom-in; }
+  .cam img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cam .badge { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: #0008;
+                padding: 2px 7px; border-radius: 999px; display: flex; align-items: center; gap: 5px; }
+  .cam .msg { position: absolute; inset: 0; display: grid; place-items: center; color: #bbb; font-size: 13px; text-align: center; padding: 12px; }
+  .cam .info { padding: 10px 14px; }
+  .cam code { font-size: 11px; color: var(--muted); user-select: all; word-break: break-all; }
+  #viewer { position: fixed; inset: 0; background: #000d; display: grid; place-items: center; z-index: 10; padding: 16px; }
+  .vbox { width: min(1280px, 100%); display: flex; flex-direction: column; gap: 10px; }
+  .vbar { display: flex; align-items: center; gap: 10px; color: #fff; }
+  .vbadge { font-size: 12px; display: flex; align-items: center; gap: 6px; background: #fff2; padding: 3px 9px; border-radius: 999px; }
+  .vbtn { background: #fff2; color: #fff; border: 0; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+  .vbtn:hover { background: #fff3; }
+  .vbtn.active { background: #fff; color: #000; }
+  .vstage { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+  .vstage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .vnote { color: #ccc; font-size: 13px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+           padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Tapo Home</h1>
+    <div class="status"><span id="dot" class="dot"></span><span id="status">Connecting…</span></div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="rediscover">Rediscover</button>
+    <button class="btn" id="alloff">All off</button>
+  </div>
+</header>
+<main>
+  <div>
+    <section id="cameras" hidden><h2>Cameras</h2><div class="cams" id="camgrid"></div></section>
+    <section id="appliances" hidden><h2>Appliances <span class="meta" id="appauth" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+      <div class="card" id="stconnect" hidden style="margin-bottom:12px">
+        <div class="name">Connect SmartThings</div>
+        <div class="meta">1. Open the SmartThings login and allow access. 2. You'll land on a page whose address contains <code>code=…</code>. Copy that whole address, paste it here and press Connect. You only need to do this once; the login renews itself after that.</div>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn" id="stlogin">Open SmartThings login</button>
+          <input id="stcode" placeholder="Paste the address (or just the code)" style="flex:1;min-width:200px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">
+          <button class="btn" id="stsubmit">Connect</button>
+        </div>
+      </div>
+      <div class="grid" id="appgrid"><div id="tuyacards" style="display:contents"></div><div id="stcards" style="display:contents"></div></div><div class="err" id="apperr" hidden></div></section>
+    <section id="devices"><div class="empty">Waiting for devices…</div></section>
+  </div>
+  <aside>
+    <h2>Activity</h2>
+    <div class="feed" id="events"><div class="empty">Nothing yet</div></div>
+  </aside>
+</main>
+<div id="viewer" hidden role="dialog" aria-modal="true">
+  <div class="vbox">
+    <div class="vbar">
+      <span class="name" id="viewercap"></span>
+      <span class="vbadge" id="vbadge"><span class="dot"></span><span id="vstate">connecting</span></span>
+      <span style="flex:1"></span>
+      <button class="vbtn" data-q="hd">HD</button>
+      <button class="vbtn" data-q="sd">SD</button>
+      <button class="vbtn" id="vclose" aria-label="Close">✕</button>
+    </div>
+    <div class="vstage">
+      <img id="viewersnap" alt="">
+      <img id="viewerlive" alt="" hidden>
+    </div>
+    <div class="vnote" id="vnote" hidden></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let devices = [];
+let events = [];
+let dragging = null; // id of the slider being dragged, so live updates don't fight the user
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+async function api(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" },
+                                body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
+  return r.json();
+}
+
+function fmt(v, unit) {
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  return unit ? `${v} ${unit}` : v;
+}
+
+function card(d, parentOnline = true) {
+  const online = d.online && parentOnline;
+  const sensors = d.sensors.map((s) => `<span class="chip">${esc(s.name)} <b>${esc(fmt(s.value, s.unit))}</b></span>`).join("");
+  return `
+  <div class="card ${d.on ? "on" : ""} ${online ? "" : "offline"}" data-id="${esc(d.id)}">
+    <div class="row">
+      <div style="min-width:0">
+        <div class="name" title="${esc(d.alias)}">${esc(d.alias)}</div>
+        <div class="meta">${esc(d.model)} · ${esc(d.type)}</div>
+      </div>
+      ${d.switchable ? `<button class="switch ${d.on ? "on" : ""}" data-act="toggle" aria-label="Toggle ${esc(d.alias)}" ${online ? "" : "disabled"}></button>` : ""}
+    </div>
+    ${d.dimmable ? `<input type="range" min="1" max="100" value="${d.brightness ?? 0}" data-act="bright" ${online ? "" : "disabled"} aria-label="Brightness">` : ""}
+    ${sensors ? `<div class="sensors">${sensors}</div>` : ""}
+    ${d.error ? `<div class="err">${esc(d.error)}</div>` : ""}
+  </div>`;
+}
+
+function render() {
+  if (dragging) return;
+  const root = $("#devices");
+  if (!devices.length) { root.innerHTML = `<div class="empty">No devices yet. Discovery can take a few seconds.</div>`; return; }
+  const hubs = devices.filter((d) => d.children && d.children.length);
+  const rest = devices.filter((d) => !(d.children && d.children.length));
+  let html = "";
+  if (rest.length) html += `<h2>Devices</h2><div class="grid">${rest.map((d) => card(d)).join("")}</div>`;
+  for (const h of hubs) {
+    html += `<h2>${esc(h.alias)}</h2><div class="hub">
+      <div class="row"><div><div class="name">${esc(h.alias)}</div><div class="meta">${esc(h.model)} · ${esc(h.host)} · ${h.children.length} paired</div></div>
+      <span class="meta">${h.online ? "online" : "offline"}</span></div>
+      ${h.error ? `<div class="err">${esc(h.error)}</div>` : ""}
+      <div class="grid">${h.children.map((c) => card(c, h.online)).join("")}</div></div>`;
+  }
+  root.innerHTML = html;
+}
+
+function renderEvents() {
+  const root = $("#events");
+  if (!events.length) { root.innerHTML = `<div class="empty">Nothing yet</div>`; return; }
+  const label = { singleClick: "Single press", doubleClick: "Double press", started: "Cycle started", finished: "Cycle finished",
+                  heating: "Heating", hot_water_ready: "Hot water ready", safety_off: "Switched off (safety limit)" };
+  root.innerHTML = events.slice(0, 30).map((e) => `
+    <div class="ev"><div class="name">${esc(e.alias)}</div>
+    <div class="meta">${esc(label[e.event] || e.event)} · ${esc((e.received || "").replace("T", " "))}</div></div>`).join("");
+}
+
+// ---------------------------------------------------------------- appliances (SmartThings)
+let appliances = [];
+function minutesLeft(a) {
+  if (a.ends_at) return Math.max(0, Math.round((new Date(a.ends_at) - Date.now()) / 60000));
+  return a.remaining_min;
+}
+function renderAppliances(msg) {
+  if (msg) {
+    appliances = msg.appliances || [];
+    const auth = msg.auth || {};
+    const needsLogin = auth.mode === "oauth" && !auth.connected;
+    $("#stconnect").hidden = !needsLogin;
+    $("#apperr").hidden = !msg.error || needsLogin;
+    $("#apperr").textContent = msg.error || "";
+    $("#appauth").textContent = auth.mode === "oauth" && auth.connected ? "· SmartThings, auto-renewing login"
+      : auth.mode === "pat" ? "· SmartThings, 24 h token" : "";
+  }
+  updateApplianceSection();
+  $("#stcards").innerHTML = appliances.map((a) => {
+    const cls = a.machine_state === "run" ? "running" : a.machine_state === "pause" ? "paused" : "";
+    const left = minutesLeft(a);
+    const ends = a.ends_at ? new Date(a.ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+    const chips = [
+      a.power_w != null ? `<span class="chip">Power <b>${esc(a.power_w)} W</b></span>` : "",
+      a.remote_control != null ? `<span class="chip">Remote <b>${a.remote_control === "true" || a.remote_control === true ? "on" : "off"}</b></span>` : "",
+    ].join("");
+    return `
+    <div class="card appl ${cls} ${a.online === false ? "offline" : ""}" data-id="${esc(a.id)}">
+      <div class="row">
+        <div style="min-width:0"><div class="name">${esc(a.name)}</div>
+          <div class="meta">${a.kind === "washer" ? "Washer" : "Dryer"} · Samsung</div></div>
+        <span class="state">${esc(a.status || "?")}</span>
+      </div>
+      ${cls ? `
+        <div><div class="big">${left != null ? `${left} min` : esc(a.phase || "")}</div>
+        <div class="meta">${esc(a.phase || "")}${ends ? ` · done ~${ends}` : ""}</div></div>
+        ${a.progress != null ? `<div class="bar"><i style="width:${Math.min(100, +a.progress)}%"></i></div>` : ""}` : ""}
+      ${chips ? `<div class="sensors">${chips}</div>` : ""}
+      ${a.error ? `<div class="err">${esc(a.error)}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+setInterval(() => appliances.length && renderAppliances(), 30000);
+
+function updateApplianceSection() {
+  const show = appliances.length || tuyaDevices.length || !$("#apperr").hidden || !$("#stconnect").hidden;
+  $("#appliances").hidden = !show;
+}
+
+// ---------------------------------------------------------------- Tuya (immersion heater etc.)
+let tuyaDevices = [];
+let tuyaBusy = false;
+const fmtKW = (w) => w == null ? "–" : w >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${Math.round(w)} W`;
+const money = (v, cur) => v == null ? "" : ` · ${cur}${v.toFixed(2)}`;
+
+function renderTuya(list) {
+  if (list) tuyaDevices = list;
+  updateApplianceSection();
+  $("#tuyacards").innerHTML = tuyaDevices.map((t) => {
+    const cls = t.status === "Heating" ? "running" : t.status === "Hot" ? "paused" : "";
+    const boostMin = t.boost_ends_at ? Math.max(0, Math.ceil((new Date(t.boost_ends_at) - Date.now()) / 60000)) : null;
+    const sub = t.on && t.online
+      ? [t.current_a != null ? `${t.current_a} A` : "", t.voltage_v ? `${Math.round(t.voltage_v)} V` : ""].filter(Boolean).join(" · ")
+      : "";
+    return `
+    <div class="card appl wide ${cls} ${t.online ? "" : "offline"}" data-id="${esc(t.id)}">
+      <div class="row">
+        <div style="min-width:0"><div class="name">${esc(t.name)}</div>
+          <div class="meta">Immersion heater · ${esc(t.model)}</div></div>
+        <div class="row" style="gap:10px">
+          <span class="state">${esc(t.status === "Hot" ? "Hot water ready" : t.status)}</span>
+          <button class="switch ${t.on ? "on" : ""}" data-tuya="toggle" aria-label="Toggle ${esc(t.name)}" ${t.online ? "" : "disabled"}></button>
+        </div>
+      </div>
+      <div class="row" style="align-items:flex-end">
+        <div><div class="big">${t.on ? fmtKW(t.power_w) : "Off"}</div><div class="meta">${esc(sub) || "&nbsp;"}</div></div>
+        <div class="meta" style="text-align:right">${boostMin != null ? `<b style="color:var(--ink)">Boost: ${boostMin} min left</b><br>` : ""}
+          ${t.boost_ends_at ? `ends ${new Date(t.boost_ends_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}</div>
+      </div>
+      ${t.has_boost ? `<div class="row" style="justify-content:flex-start;gap:6px;flex-wrap:wrap">
+        ${[30, 60, 90].map((m) => `<button class="btn" data-tuya="boost" data-min="${m}" ${t.online ? "" : "disabled"}>Boost ${m} min</button>`).join("")}
+        ${boostMin != null ? `<button class="btn" data-tuya="boost" data-min="0">Cancel timer</button>` : ""}
+      </div>` : ""}
+      <div class="sensors">
+        <span class="chip">Today <b>${t.kwh_today.toFixed(2)} kWh${money(t.cost_today, t.currency)}</b></span>
+        <span class="chip">7 days <b>${t.kwh_7d.toFixed(2)} kWh${money(t.cost_7d, t.currency)}</b></span>
+        ${t.max_on_minutes ? `<span class="chip">Auto-off after <b>${t.max_on_minutes} min</b></span>` : ""}
+        ${t.faults.map((f) => `<span class="chip" style="color:var(--bad)">Fault <b style="color:var(--bad)">${esc(f)}</b></span>`).join("")}
+      </div>
+      <div class="meta">Energy: ${esc(t.energy_source)}</div>
+      ${t.energy_error ? `<div class="err">Cloud history: ${esc(t.energy_error)}</div>` : ""}
+      ${t.error && !t.online ? `<div class="err">${esc(t.error)}</div>` : ""}
+    </div>`;
+  }).join("");
+}
+setInterval(() => tuyaDevices.some((t) => t.boost_ends_at) && renderTuya(), 30000);
+
+$("#tuyacards").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-tuya]");
+  if (!btn || tuyaBusy) return;
+  const id = btn.closest(".card").dataset.id;
+  tuyaBusy = true;
+  try {
+    if (btn.dataset.tuya === "toggle") {
+      await api(`/api/tuya/${encodeURIComponent(id)}/state`, {});
+    } else {
+      const m = +btn.dataset.min;
+      await api(`/api/tuya/${encodeURIComponent(id)}/boost`, { minutes: m });
+      toast(m ? `Boost on for ${m} min` : "Timer cancelled");
+    }
+  } catch (e) { toast(e.message); }
+  finally { tuyaBusy = false; }
+});
+
+$("#stlogin").onclick = async () => {
+  try {
+    const r = await (await fetch("/api/smartthings/auth-url")).json();
+    window.open(r.url, "_blank", "noopener");
+  } catch (e) { toast("Could not get the login link"); }
+};
+$("#stsubmit").onclick = async () => {
+  const code = $("#stcode").value.trim();
+  if (!code) return toast("Paste the address first");
+  try { await api("/api/smartthings/connect", { code }); $("#stcode").value = ""; toast("SmartThings connected"); }
+  catch (e) { toast(e.message); }
+};  // keep the countdown fresh between polls
+
+function findDevice(id) {
+  for (const d of devices) {
+    if (d.id === id) return d;
+    for (const c of d.children || []) if (c.id === id) return c;
+  }
+}
+
+$("#devices").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest('[data-act="toggle"]');
+  if (!btn) return;
+  const id = btn.closest(".card").dataset.id;
+  const d = findDevice(id);
+  if (d) { d.on = !d.on; render(); } // optimistic
+  try { await api(`/api/devices/${encodeURIComponent(id)}/toggle`); }
+  catch (e) { if (d) { d.on = !d.on; render(); } toast(e.message); }
+});
+
+$("#devices").addEventListener("input", (ev) => {
+  if (ev.target.dataset.act === "bright") dragging = ev.target.closest(".card").dataset.id;
+});
+$("#devices").addEventListener("change", async (ev) => {
+  if (ev.target.dataset.act !== "bright") return;
+  const id = ev.target.closest(".card").dataset.id;
+  const value = +ev.target.value;
+  dragging = null;
+  try { await api(`/api/devices/${encodeURIComponent(id)}/brightness`, { value }); }
+  catch (e) { toast(e.message); render(); }
+});
+
+$("#alloff").onclick = async () => {
+  try { const r = await api("/api/scenes/all-off"); toast(`Switched off ${r.switched_off} device(s)`); }
+  catch (e) { toast(e.message); }
+};
+$("#rediscover").onclick = async () => {
+  toast("Discovering…");
+  try { const r = await api("/api/discover"); toast(`${r.devices} device(s) on the network`); }
+  catch (e) { toast(e.message); }
+};
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  let ping;
+  ws.onopen = () => {
+    $("#dot").classList.add("live"); $("#status").textContent = "Live · local network";
+    ping = setInterval(() => ws.readyState === 1 && ws.send("ping"), 25000);
+  };
+  ws.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.type === "devices") { devices = msg.devices; render(); }
+    else if (msg.type === "events") { events = msg.events; renderEvents(); }
+    else if (msg.type === "appliances") { renderAppliances(msg); }
+    else if (msg.type === "tuya") { renderTuya(msg.devices); }
+    else if (msg.type === "event") {
+      events.unshift(msg.event); renderEvents();
+      document.querySelector(`.card[data-id="${CSS.escape(msg.event.device_id)}"]`)?.classList.add("flash");
+    }
+  };
+  ws.onclose = () => {
+    clearInterval(ping);
+    $("#dot").classList.remove("live"); $("#status").textContent = "Disconnected, retrying…";
+    setTimeout(connect, 2000);
+  };
+}
+connect();
+
+// ---------------------------------------------------------------- cameras
+// Each image reloads only after the previous frame arrived, so a slow camera never piles up requests.
+let camRefresh = 2;
+let camLive = false;
+const viewer = { id: null };
+
+function snapURL(id, res) { return `/api/cameras/${encodeURIComponent(id)}/snapshot?res=${res}&t=${Date.now()}`; }
+
+function pump(img, id, res, onState, isActive) {
+  const next = () => setTimeout(tick, camRefresh * 1000);
+  function tick() {
+    if (!isActive()) return;
+    if (document.hidden) return next();
+    const pre = new Image();
+    pre.onload = () => { img.src = pre.src; onState(true); next(); };
+    pre.onerror = () => { onState(false); setTimeout(tick, Math.max(camRefresh, 5) * 1000); };
+    pre.src = snapURL(id, res);
+  }
+  tick();
+}
+
+async function loadCameras() {
+  let data;
+  try { data = await (await fetch("/api/cameras")).json(); } catch { return; }
+  camRefresh = data.refresh_seconds || 2;
+  camLive = !!data.live;
+  if (!data.cameras.length) return;
+  $("#cameras").hidden = false;
+  $("#camgrid").innerHTML = data.cameras.map((c) => `
+    <div class="cam" data-cam="${esc(c.id)}">
+      <div class="frame" title="Click for live video">
+        <img alt="${esc(c.name)}">
+        <div class="msg">Loading…</div>
+        <span class="badge"><span class="dot"></span><span class="bt">connecting</span></span>
+      </div>
+      <div class="info"><div class="name">${esc(c.name)}</div>
+        <code>${esc(c.rtsp.high)}</code></div>
+    </div>`).join("");
+  for (const c of data.cameras) {
+    const el = document.querySelector(`.cam[data-cam="${CSS.escape(c.id)}"]`);
+    let lastOk = null;
+    pump(el.querySelector("img"), c.id, "low", (ok) => {
+      if (ok) lastOk = new Date();
+      el.querySelector(".msg").hidden = ok || !!lastOk;
+      if (!ok && !lastOk) el.querySelector(".msg").textContent = "Camera not reachable";
+      el.querySelector(".dot").classList.toggle("live", ok);
+      el.querySelector(".bt").textContent = ok ? "live" : lastOk ? `stale · ${lastOk.toLocaleTimeString()}` : "offline";
+    }, () => true);
+    el.querySelector(".frame").onclick = () => openViewer(c);
+  }
+}
+
+// ---- live viewer modal
+// Shows the latest snapshot instantly, then swaps to the MJPEG live stream once its first frame arrives.
+// If live fails (no ffmpeg, RTSP off), it falls back to fast HD snapshots.
+function setViewerState(text, live) {
+  $("#vstate").textContent = text;
+  $("#vbadge .dot").classList.toggle("live", !!live);
+}
+
+function stopLive() {
+  const live = $("#viewerlive");
+  live.onerror = null;
+  live.removeAttribute("src");  // aborts the MJPEG request, which lets the server stop ffmpeg
+  live.hidden = true;
+  clearInterval(viewer.watch);
+}
+
+function openViewer(c, quality = "hd") {
+  stopLive();
+  const token = (viewer.id = {});  // fresh token: older loops for a previous open stop themselves
+  viewer.cam = c;
+  const active = () => viewer.id === token;
+  const snap = $("#viewersnap"), live = $("#viewerlive"), note = $("#vnote");
+  $("#viewercap").textContent = c.name;
+  document.querySelectorAll(".vbtn[data-q]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.q === quality);
+    b.hidden = !camLive;
+  });
+  snap.src = document.querySelector(`.cam[data-cam="${CSS.escape(c.id)}"] img`).src || "";
+  note.hidden = true;
+  $("#viewer").hidden = false;
+
+  const fallback = (why) => {
+    if (!active()) return;
+    stopLive();
+    note.textContent = why; note.hidden = false;
+    setViewerState("snapshots", true);
+    pump(snap, c.id, "high", (ok) => active() && setViewerState(ok ? "snapshots" : "offline", ok), active);
+  };
+
+  if (!camLive) return fallback("Live video needs ffmpeg on the dashboard machine (brew install ffmpeg). Showing snapshots instead.");
+
+  setViewerState("connecting…", false);
+  live.onerror = () => fallback("Live stream unavailable. Check that RTSP is enabled on the camera. Showing snapshots instead.");
+  live.src = `/api/cameras/${encodeURIComponent(c.id)}/live?q=${quality}&t=${Date.now()}`;
+  const started = Date.now();
+  viewer.watch = setInterval(() => {  // multipart <img> has no reliable load event: poll for the first frame
+    if (!active()) return clearInterval(viewer.watch);
+    if (live.naturalWidth > 0) {
+      clearInterval(viewer.watch);
+      live.hidden = false;
+      setViewerState(`live · ${quality.toUpperCase()}`, true);
+    } else if (Date.now() - started > 20000) {
+      fallback("Live stream didn't start within 20 s. Showing snapshots instead.");
+    }
+  }, 250);
+}
+
+function closeViewer() {
+  if ($("#viewer").hidden) return;
+  stopLive();
+  viewer.id = null;
+  $("#viewer").hidden = true;
+}
+$("#viewer").addEventListener("click", (e) => { if (e.target.id === "viewer") closeViewer(); });
+$("#vclose").onclick = closeViewer;
+document.querySelectorAll(".vbtn[data-q]").forEach((b) => (b.onclick = () => openViewer(viewer.cam, b.dataset.q)));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeViewer(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) closeViewer(); });  // free ffmpeg
+
+loadCameras();
+</script>
+</body>
+</html>

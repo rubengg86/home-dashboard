@@ -1,0 +1,10 @@
+{
+  "Bedroom button": {
+    "singleClick": { "toggle": "Bedside lamp" },
+    "doubleClick": "all_off"
+  },
+  "Hall button": {
+    "singleClick": { "on": ["Hall bulb", "Porch plug"] },
+    "doubleClick": { "off": ["Hall bulb", "Porch plug"] }
+  }
+}

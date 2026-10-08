@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.env
+actions.json
+.smartthings_tokens.json
+devices.json
+tinytuya.json
+snapshot.json
+tuya-raw.json
+.tuya_energy.json
+.idea/
+.DS_Store
+*.tmp

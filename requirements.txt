@@ -1,0 +1,6 @@
+python-kasa>=0.10,<0.11
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-dotenv>=1.0
+httpx>=0.27
+tinytuya>=1.13
