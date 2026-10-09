@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -49,6 +50,9 @@ cameras = CameraManager(
     ffmpeg=os.getenv("FFMPEG") or None,
     live_fps=int(os.getenv("LIVE_FPS", "10")),
     live_max_width=int(os.getenv("LIVE_MAX_WIDTH", "1280")),
+    ftp={"user": os.getenv("CAMERA_FTP_USER") or None,
+         "password": os.getenv("CAMERA_FTP_PASS"),
+         "root": os.getenv("CAMERA_RECORD_DIR") or None},
 )
 smartthings = None
 _st_auth = None
@@ -390,6 +394,67 @@ async def camera_snapshot(cam_id: str, res: str = "low"):
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Camera error: {e}")
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+# ---------------------------------------------------------------- camera recordings (FTP)
+def _recs(cam_id: str):
+    try:
+        return cameras.get(cam_id).recordings
+    except KeyError:
+        raise HTTPException(404, f"Unknown camera {cam_id}")
+
+
+async def _ftp(fn, *args):
+    try:
+        return await asyncio.to_thread(fn, *args)
+    except HTTPException:
+        raise
+    except PermissionError as e:
+        raise HTTPException(400, str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:  # noqa: BLE001
+        log.warning("Camera FTP error: %s", e)
+        raise HTTPException(502, f"Camera FTP: {e}")
+
+
+@app.get("/api/cameras/{cam_id}/recordings")
+async def recordings_list(cam_id: str, dir: str | None = None):
+    """No dir: hour folders (newest first). With dir: the clips in that folder."""
+    rec = _recs(cam_id)
+    if dir:
+        return {"dir": dir, "clips": await _ftp(rec.list_clips, dir)}
+    return {"hours": await _ftp(rec.list_hours)}
+
+
+@app.get("/api/cameras/{cam_id}/recordings/file")
+async def recordings_file(cam_id: str, path: str, request: Request):
+    """Stream a clip with HTTP Range support so the video player can seek."""
+    rec = _recs(cam_id)
+    total = await _ftp(rec.size, path)
+    ext = os.path.splitext(path)[1].lower()
+    media = {".mp4": "video/mp4", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}.get(ext, "application/octet-stream")
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
+    rng = request.headers.get("range", "")
+    m = re.match(r"bytes=(\d*)-(\d*)$", rng.strip())
+    if m and (m.group(1) or m.group(2)):
+        if m.group(1):
+            start = int(m.group(1))
+            end = min(int(m.group(2)), total - 1) if m.group(2) else total - 1
+        else:  # suffix range: last N bytes
+            start, end = max(0, total - int(m.group(2))), total - 1
+        if start >= total or start > end:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{total}"})
+        length = end - start + 1
+        headers.update({"Content-Range": f"bytes {start}-{end}/{total}", "Content-Length": str(length)})
+        return StreamingResponse(rec.stream(path, start, length), status_code=206, media_type=media, headers=headers)
+    headers["Content-Length"] = str(total)
+    return StreamingResponse(rec.stream(path, 0, total), media_type=media, headers=headers)
+
+
+@app.get("/api/debug/camera-ftp/{cam_id}")
+async def camera_ftp_debug(cam_id: str):
+    return await _ftp(_recs(cam_id).debug)
 
 
 @app.post("/api/discover")

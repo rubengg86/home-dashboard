@@ -127,6 +127,39 @@
   .vnote { color: #bbb; font-size: 12.5px; }
   .vnote code { user-select: all; }
 
+  /* ---------- recordings */
+  .cam .recbtn { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 10px; border: 0;
+                 background: #0009; color: #fff; display: grid; place-items: center; cursor: pointer; transition: background .15s; }
+  .cam .recbtn:hover { background: #000c; }
+  .cam .recbtn svg { width: 18px; height: 18px; }
+  #recs { position: fixed; inset: 0; background: #0d0d0c; display: grid; place-items: center; z-index: 11; padding: 16px; }
+  .rbox { width: min(1280px, 100%); height: min(860px, 100%); display: flex; flex-direction: column; gap: 10px; color: #fff; }
+  .rbody { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .rbody { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+                              .rdays { max-height: 150px; } }
+  .rdays { overflow: auto; background: #ffffff0d; border-radius: 12px; padding: 8px; }
+  .rday { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #aaa; margin: 10px 6px 6px; }
+  .rday:first-child { margin-top: 4px; }
+  .rhours { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rhour { background: #ffffff14; color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+  .rhour:hover { background: #ffffff26; }
+  .rhour.active { background: #fff; color: #000; }
+  .rmain { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+  .rmain .vstage { flex: none; }
+  .rmain video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; }
+  .rnow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #ddd; }
+  .rnow label { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: auto; }
+  .rclips { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px; align-content: start; }
+  .rclip { position: relative; border: 0; border-radius: 10px; overflow: hidden; background: #ffffff14; color: #fff;
+           cursor: pointer; padding: 0; text-align: left; aspect-ratio: 16 / 10; }
+  .rclip img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .9; }
+  .rclip .lbl { position: absolute; inset: auto 0 0 0; padding: 14px 8px 6px; font-size: 12.5px; font-weight: 600;
+                background: linear-gradient(transparent, #000b); display: flex; justify-content: space-between; }
+  .rclip .lbl span { font-weight: 400; opacity: .8; }
+  .rclip:hover { outline: 2px solid #ffffff60; }
+  .rclip.active { outline: 2px solid var(--on); }
+  .rmsg { color: #aaa; font-size: 13px; padding: 10px 4px; }
   #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--bg);
            padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 20; }
   #toast.show { opacity: 1; transform: translateX(-50%); }
@@ -188,6 +221,33 @@
     <div class="vnote" id="vnote"></div>
   </div>
 </div>
+<div id="recs" hidden role="dialog" aria-modal="true" aria-label="Camera recordings">
+  <div class="rbox">
+    <div class="vbar">
+      <span class="name" id="recscap">Recordings</span>
+      <span class="pill" id="recsinfo"></span>
+      <span style="flex:1"></span>
+      <button class="vbtn" id="recsrefresh" title="Reload the list">Refresh</button>
+      <button class="vbtn" id="recsclose" aria-label="Close">✕</button>
+    </div>
+    <div class="rbody">
+      <nav class="rdays" id="recsdays" aria-label="Recording hours"><div class="rmsg">Loading…</div></nav>
+      <div class="rmain">
+        <div class="vstage">
+          <video id="recvideo" controls playsinline preload="metadata"></video>
+          <div class="msg" id="recmsg" style="position:absolute;inset:0;display:grid;place-items:center;color:#999;font-size:14px">Pick a recording</div>
+        </div>
+        <div class="rnow">
+          <button class="vbtn" id="recprev" title="Previous clip (←)">‹ Prev</button>
+          <button class="vbtn" id="recnext" title="Next clip (→)">Next ›</button>
+          <span id="recnow"></span>
+          <label><input type="checkbox" id="recauto" checked> Play continuously</label>
+        </div>
+        <div class="rclips" id="recsclips"></div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="toast" role="status"></div>
 
 <script>
@@ -224,6 +284,7 @@ const ICONS = {
   hub: svg('<rect x="4" y="9" width="16" height="10" rx="3"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/><circle cx="12" cy="14" r="1.2"/>'),
   heater: svg('<path d="M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-2 1-3 1.5-4.5C10.5 8 12 6 12 3z"/><path d="M5 21h14"/>'),
   washer: svg('<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="13" r="4.5"/><path d="M8 6.5h.01M11 6.5h2"/>'),
+  film: svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>'),
   dryer: svg('<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="13" r="4.5"/><path d="M10.5 11.5c1 1 2 1 3 0M10.5 14.5c1 1 2 1 3 0"/>'),
 };
 function iconFor(d) {
@@ -506,6 +567,7 @@ async function loadCameras() {
       <img alt="">
       <div class="msg">Loading…</div>
       <span class="pill"><span class="dot"></span><span class="bt">connecting</span></span>
+      ${c.recordings ? `<button class="recbtn" title="Recordings" aria-label="Recordings of ${esc(c.name)}">${ICONS.film}</button>` : ""}
       <div class="over"><span class="name">${esc(c.name)}</span><span class="play">${camLive ? "▶ Live" : "Enlarge"}</span></div>
     </div>`).join("");
   for (const c of data.cameras) {
@@ -519,6 +581,8 @@ async function loadCameras() {
       el.querySelector(".bt").textContent = ok ? "snapshot" : lastOk ? `stale · ${hhmm(lastOk)}` : "offline";
     }, () => true);
     el.onclick = () => openViewer(c);
+    const rb = el.querySelector(".recbtn");
+    if (rb) rb.onclick = (e) => { e.stopPropagation(); openRecordings(c); };
     el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(c); } };
   }
 }
@@ -571,8 +635,140 @@ function closeViewer() {
 $("#viewer").addEventListener("click", (e) => { if (e.target.id === "viewer") closeViewer(); });
 $("#vclose").onclick = closeViewer;
 document.querySelectorAll(".vbtn[data-q]").forEach((b) => (b.onclick = () => openViewer(viewer.cam, b.dataset.q)));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeViewer(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { closeViewer(); closeRecordings(); }
+  if (!$("#recs").hidden && (e.key === "ArrowRight" || e.key === "ArrowLeft") && document.activeElement?.tagName !== "INPUT") {
+    e.preventDefault(); stepClip(e.key === "ArrowRight" ? 1 : -1);
+  }
+});
 document.addEventListener("visibilitychange", () => { if (document.hidden) closeViewer(); });  // frees ffmpeg
+
+// ---------------------------------------------------------------- recordings (camera FTP)
+// Hours are newest-first; clips inside an hour are oldest-first. "Next" walks forward in time,
+// crossing into the next (newer) hour, so continuous play replays events in order.
+const rec = { cam: null, hours: [], hourIdx: -1, clips: [], clipIdx: -1, token: 0 };
+const recBase = () => `/api/cameras/${encodeURIComponent(rec.cam.id)}/recordings`;
+const fileURL = (path) => `${recBase()}/file?path=${encodeURIComponent(path)}`;
+
+function dayLabel(iso) {
+  if (!iso) return "Other";
+  const d = new Date(iso + "T00:00:00"), today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - d) / 86400000);
+  return diff === 0 ? "Today" : diff === 1 ? "Yesterday"
+    : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+const fmtDur = (s) => s == null ? "" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
+  return r.json();
+}
+
+async function openRecordings(c) {
+  closeViewer();
+  rec.cam = c;
+  $("#recscap").textContent = `${c.name} · Recordings`;
+  $("#recs").hidden = false;
+  await loadHours();
+}
+
+async function loadHours() {
+  const token = ++rec.token;
+  $("#recsdays").innerHTML = `<div class="rmsg">Loading…</div>`;
+  $("#recsclips").innerHTML = "";
+  $("#recsinfo").textContent = "";
+  try {
+    const { hours } = await getJSON(recBase());
+    if (token !== rec.token) return;
+    rec.hours = hours;
+    if (!hours.length) {
+      $("#recsdays").innerHTML = `<div class="rmsg">No recordings on the camera yet.</div>`;
+      return;
+    }
+    $("#recsinfo").textContent = `${hours.length} hour${hours.length === 1 ? "" : "s"} recorded`;
+    const byDay = new Map();
+    hours.forEach((h, i) => { const k = h.day || ""; if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push([h, i]); });
+    $("#recsdays").innerHTML = [...byDay].map(([day, list]) => `
+      <div class="rday">${esc(dayLabel(day))}</div>
+      <div class="rhours">${list.map(([h, i]) => `<button class="rhour" data-hour="${i}">${esc(h.label)}</button>`).join("")}</div>`).join("");
+    await selectHour(0);
+  } catch (e) {
+    if (token === rec.token) $("#recsdays").innerHTML = `<div class="rmsg">Couldn't read the camera's recordings: ${esc(e.message)}</div>`;
+  }
+}
+
+async function selectHour(i, then) {
+  const token = ++rec.token;
+  rec.hourIdx = i;
+  document.querySelectorAll(".rhour").forEach((b) => b.classList.toggle("active", +b.dataset.hour === i));
+  document.querySelector(`.rhour[data-hour="${i}"]`)?.scrollIntoView({ block: "nearest" });
+  $("#recsclips").innerHTML = `<div class="rmsg">Loading clips…</div>`;
+  try {
+    const { clips } = await getJSON(`${recBase()}?dir=${encodeURIComponent(rec.hours[i].dir)}`);
+    if (token !== rec.token) return;
+    rec.clips = clips;
+    rec.clipIdx = -1;
+    if (!clips.length) { $("#recsclips").innerHTML = `<div class="rmsg">No clips in this hour.</div>`; return; }
+    $("#recsclips").innerHTML = clips.map((c, k) => `
+      <button class="rclip" data-clip="${k}" title="${esc(c.name)}">
+        ${c.thumb ? `<img loading="lazy" alt="" src="${fileURL(c.thumb)}">` : ""}
+        <span class="lbl">${esc(c.label)}<span>${esc(fmtDur(c.duration))}</span></span>
+      </button>`).join("");
+    if (then === "first") playClip(0);
+    else if (then === "last") playClip(clips.length - 1);
+  } catch (e) {
+    if (token === rec.token) $("#recsclips").innerHTML = `<div class="rmsg">Couldn't list this hour: ${esc(e.message)}</div>`;
+  }
+}
+
+function playClip(k) {
+  const c = rec.clips[k];
+  if (!c) return;
+  rec.clipIdx = k;
+  document.querySelectorAll(".rclip").forEach((b) => b.classList.toggle("active", +b.dataset.clip === k));
+  document.querySelector(`.rclip[data-clip="${k}"]`)?.scrollIntoView({ block: "nearest" });
+  const v = $("#recvideo");
+  $("#recmsg").hidden = true;
+  v.src = fileURL(c.path);
+  v.play().catch(() => {});
+  const day = rec.hours[rec.hourIdx]?.day;
+  $("#recnow").textContent = `${day ? dayLabel(day) + " · " : ""}${c.label}${c.duration ? ` · ${fmtDur(c.duration)}` : ""}`;
+}
+
+function stepClip(dir) {
+  if (rec.clipIdx < 0 && rec.clips.length) return playClip(dir > 0 ? 0 : rec.clips.length - 1);
+  const k = rec.clipIdx + dir;
+  if (k >= 0 && k < rec.clips.length) return playClip(k);
+  // cross into the neighbouring hour (hours are newest-first, so "forward in time" is index - 1)
+  const h = rec.hourIdx - dir;
+  if (h >= 0 && h < rec.hours.length) selectHour(h, dir > 0 ? "first" : "last");
+  else toast(dir > 0 ? "That's the latest recording" : "That's the oldest recording");
+}
+
+function closeRecordings() {
+  if ($("#recs").hidden) return;
+  rec.token++;
+  const v = $("#recvideo");
+  v.pause(); v.removeAttribute("src"); v.load();  // aborts the stream so the FTP connection closes
+  $("#recmsg").hidden = false;
+  $("#recnow").textContent = "";
+  $("#recs").hidden = true;
+}
+
+$("#recsdays").addEventListener("click", (e) => { const b = e.target.closest(".rhour"); if (b) selectHour(+b.dataset.hour); });
+$("#recsclips").addEventListener("click", (e) => { const b = e.target.closest(".rclip"); if (b) playClip(+b.dataset.clip); });
+$("#recprev").onclick = () => stepClip(-1);
+$("#recnext").onclick = () => stepClip(1);
+$("#recsrefresh").onclick = () => loadHours();
+$("#recsclose").onclick = closeRecordings;
+$("#recs").addEventListener("click", (e) => { if (e.target.id === "recs") closeRecordings(); });
+$("#recvideo").addEventListener("ended", () => { if ($("#recauto").checked) stepClip(1); });
+$("#recvideo").addEventListener("error", () => {
+  if (!$("#recvideo").getAttribute("src")) return;
+  $("#recmsg").hidden = false;
+  $("#recmsg").textContent = "This clip couldn't be played.";
+});
 
 loadCameras();
 </script>

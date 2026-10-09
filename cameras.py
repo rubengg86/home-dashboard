@@ -16,11 +16,13 @@ from urllib.parse import quote, urlsplit
 
 import httpx
 
+from recordings import FtpRecordings
+
 log = logging.getLogger("tapo.cameras")
 
 
 class Camera:
-    def __init__(self, name: str, url: str, min_interval: float) -> None:
+    def __init__(self, name: str, url: str, min_interval: float, ftp: dict | None = None) -> None:
         if "://" not in url:
             url = "http://" + url
         parts = urlsplit(url)
@@ -34,6 +36,13 @@ class Camera:
         self.error: str | None = None
         self._cache: dict[str, tuple[float, bytes]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
+        ftp = ftp or {}
+        self.recordings = FtpRecordings(
+            self.host,
+            user=ftp.get("user") or (self.auth[0] if self.auth else "root"),
+            password=ftp.get("password") if ftp.get("password") is not None else (self.auth[1] if self.auth else ""),
+            root=ftp.get("root") or None,
+        )
 
     def rtsp_url(self, quality: str, with_auth: bool = True) -> str:
         auth = ""
@@ -49,6 +58,7 @@ class Camera:
             "online": self.online,
             "error": self.error,
             "rtsp": {"high": self.rtsp_url("hd", False), "low": self.rtsp_url("sd", False)},
+            "recordings": True,
         }
 
     async def snapshot(self, client: httpx.AsyncClient, res: str) -> bytes:
@@ -176,7 +186,7 @@ class LiveStream:
 
 class CameraManager:
     def __init__(self, spec: str, min_interval: float = 1.0, ffmpeg: str | None = None,
-                 live_fps: int = 10, live_max_width: int = 1280) -> None:
+                 live_fps: int = 10, live_max_width: int = 1280, ftp: dict | None = None) -> None:
         self.cameras: dict[str, Camera] = {}
         self.ffmpeg = ffmpeg or shutil.which("ffmpeg")
         self.live_fps, self.live_max_width = live_fps, live_max_width
@@ -187,7 +197,7 @@ class CameraManager:
             name, _, url = entry.partition("=")
             if not url:
                 url = name  # bare IP: use it as the name too
-            cam = Camera(name, url.strip(), min_interval)
+            cam = Camera(name, url.strip(), min_interval, ftp)
             self.cameras[cam.id] = cam
             log.info("Camera %s at %s", cam.name, cam.base)
         self.client = httpx.AsyncClient()
@@ -199,6 +209,11 @@ class CameraManager:
         if cam_id not in self.cameras:
             raise KeyError(cam_id)
         return await self.cameras[cam_id].snapshot(self.client, "high" if res == "high" else "low")
+
+    def get(self, cam_id: str) -> Camera:
+        if cam_id not in self.cameras:
+            raise KeyError(cam_id)
+        return self.cameras[cam_id]
 
     @property
     def live_available(self) -> bool:

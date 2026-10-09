@@ -70,3 +70,12 @@ If the dashboard is off for more than ~29 days, the refresh token expires and th
 - **Safety cap**: `HEATER_MAX_ON_MINUTES` (default 180) switches it off if it stays on without a timer.
 - **Events / actions**: `heating`, `hot_water_ready`, `safety_off` (in Activity) plus `on`/`off`. In `actions.json`, `{"boost": {"Agua caliente": 30}}` works from any trigger, e.g. an S200B double press.
 - If the plug moves IP, it's found again by broadcast after a few failed polls. Re-run the wizard if you re-pair it in Smart Life, since that changes its key.
+
+## Camera recordings (FTP)
+
+The film icon on a camera opens its recordings, read from the camera's FTP server (yi-hack's `record/` folder: hour folders such as `2026Y10M09D14H/` holding clips such as `05M00S60.mp4`).
+
+- Pick a day and hour on the left, then click a clip. **Prev/Next** (or ← →) step through clips, crossing into the next hour. **Play continuously** goes on to the next clip by itself.
+- The backend streams clips from FTP with HTTP range support, so seeking works. At most 3 FTP connections are open at once.
+- Settings (all optional): `CAMERA_FTP_USER` (default `root`), `CAMERA_FTP_PASS` (default empty), `CAMERA_RECORD_DIR` (detected automatically).
+- Troubleshooting: `GET /api/debug/camera-ftp/<camera-id>` shows what the FTP server exposes.
