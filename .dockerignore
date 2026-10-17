@@ -1,0 +1,11 @@
+.git
+.venv
+.idea
+__pycache__
+*.pyc
+.DS_Store
+data
+.env
+*.json
+!actions.example.json
+*.tmp

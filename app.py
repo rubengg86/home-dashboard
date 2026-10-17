@@ -27,7 +27,9 @@ from smartthings_auth import OAuth, PatAuth
 from tuya import TuyaManager
 
 BASE = Path(__file__).parent
-load_dotenv(BASE / ".env")
+# config + state (.env, devices.json, tokens, energy history); a mounted volume in Docker
+DATA = Path(os.getenv("DATA_DIR") or BASE)
+load_dotenv(DATA / ".env")
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tapo.app")
@@ -64,10 +66,10 @@ if os.getenv("SMARTTHINGS_CLIENT_ID") and os.getenv("SMARTTHINGS_CLIENT_SECRET")
         os.environ["SMARTTHINGS_CLIENT_SECRET"],
         redirect_uri=os.getenv("SMARTTHINGS_REDIRECT_URI", "https://httpbin.org/get"),
         scopes=os.getenv("SMARTTHINGS_SCOPES", "r:devices:*"),
-        store=BASE / ".smartthings_tokens.json",
+        store=DATA / ".smartthings_tokens.json",
     )
 elif os.getenv("SMARTTHINGS_TOKEN"):
-    _st_auth = PatAuth(os.environ["SMARTTHINGS_TOKEN"], env_file=BASE / ".env")
+    _st_auth = PatAuth(os.environ["SMARTTHINGS_TOKEN"], env_file=DATA / ".env")
 if _st_auth:
     smartthings = SmartThings(
         _st_auth,
@@ -76,17 +78,17 @@ if _st_auth:
     )
 
 tuya = None
-_tuya_file = BASE / os.getenv("TUYA_DEVICES_FILE", "devices.json")
+_tuya_file = DATA / os.getenv("TUYA_DEVICES_FILE", "devices.json")
 if _tuya_file.exists():
     try:
         tuya = TuyaManager(
             _tuya_file,
-            energy_file=BASE / ".tuya_energy.json",
+            energy_file=DATA / ".tuya_energy.json",
             poll_seconds=float(os.getenv("TUYA_POLL_SECONDS", "3")),
             max_on_minutes=float(os.getenv("HEATER_MAX_ON_MINUTES", "0")),
             price_per_kwh=float(os.getenv("ELECTRICITY_PRICE", "0")),
             currency=os.getenv("CURRENCY", "€"),
-            cloud_config=BASE / os.getenv("TUYA_CLOUD_CONFIG", "tinytuya.json"),
+            cloud_config=DATA / os.getenv("TUYA_CLOUD_CONFIG", "tinytuya.json"),
         )
     except Exception as e:  # noqa: BLE001
         log.error("Tuya disabled, could not load %s: %s", _tuya_file.name, e)
@@ -95,7 +97,7 @@ if _tuya_file.exists():
 # actions.json maps source alias -> event name -> action, e.g.
 # {"Bedroom button": {"singleClick": {"toggle": "Bedside lamp"}, "doubleClick": {"boost": {"Agua caliente": 30}}},
 #  "Agua caliente": {"hot_water_ready": {"toggle": "Kitchen bulb"}}}
-ACTIONS_FILE = BASE / "actions.json"
+ACTIONS_FILE = DATA / "actions.json"
 
 
 def load_actions() -> dict:

@@ -1,0 +1,17 @@
+services:
+  dashboard:
+    build: .
+    image: tapo-dashboard
+    container_name: tapo-dashboard
+    restart: unless-stopped
+    # Host networking: Tapo (UDP 20002) and Tuya (UDP 6666/6667) discovery are LAN broadcasts,
+    # which don't reach a bridged container. The app then listens straight on the host's PORT.
+    network_mode: host
+    # Owner of ./data on the host, so the app can write tokens and energy history there
+    user: "${DASHBOARD_UID:-1000}:${DASHBOARD_GID:-1000}"
+    environment:
+      DATA_DIR: /data
+      PORT: ${DASHBOARD_PORT:-8811}
+    volumes:
+      - ./data:/data
+      - /etc/localtime:/etc/localtime:ro   # server's timezone, for the hourly/daily energy buckets

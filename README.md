@@ -13,6 +13,29 @@ python discover.py          # sanity check: lists devices, H100 children, featur
 python app.py               # open http://<this-machine-ip>:8000
 ```
 
+## Run with Docker (home server)
+
+Runs on port **8811** with host networking (Linux only), which LAN discovery of Tapo and Tuya devices needs. Config and state live in `./data`:
+
+```bash
+# from this Mac: copy the code, then the config + state into data/
+rsync -av --exclude .venv --exclude .git --exclude .idea --exclude __pycache__ \
+  --exclude '*.json' --exclude .env ./ user@server:~/tapo-dashboard/
+ssh user@server mkdir -p tapo-dashboard/data
+scp .env devices.json tinytuya.json .smartthings_tokens.json .tuya_energy.json .tuya_energy_hourly.json \
+  user@server:~/tapo-dashboard/data/        # plus actions.json if you have one
+
+# on the server
+cd ~/tapo-dashboard
+docker compose up -d --build   # open http://<server-ip>:8811
+docker compose logs -f
+```
+
+- `PORT` in `data/.env` is ignored; set `DASHBOARD_PORT=...` in the shell (or a `.env` next to `docker-compose.yml`) to change it.
+- The container runs as UID/GID 1000. If `data/` belongs to another user, set `DASHBOARD_UID`/`DASHBOARD_GID` (`id -u`, `id -g`).
+- Run only one dashboard at a time: two instances polling the same plug log each other out (403 errors) and the Tuya switch only accepts one local connection.
+- Update: re-run the `rsync` line, then `docker compose up -d --build` on the server.
+
 ## Features
 
 - Bulbs, plugs and other switchable devices: on/off toggle, plus a brightness slider when the bulb is dimmable.

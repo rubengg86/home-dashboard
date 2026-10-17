@@ -12,3 +12,4 @@ tuya-raw.json
 .idea/
 .DS_Store
 *.tmp
+data/
