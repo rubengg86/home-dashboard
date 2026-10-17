@@ -10,11 +10,12 @@ import asyncio
 import datetime as dt
 import enum
 import logging
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from kasa import Credentials, Device, Discover, Feature
+from kasa import Credentials, Device, Discover, Feature, Module
 
 log = logging.getLogger("tapo.devices")
 
@@ -71,12 +72,15 @@ class DeviceManager:
         poll_seconds: float = 5,
         hub_poll_seconds: float = 1.5,
         rediscover_seconds: float = 300,
+        protected: list[str] | None = None,
     ) -> None:
         self.creds = Credentials(username, password)
         self.hosts = [h.strip() for h in (hosts or []) if h.strip()]
         self.poll_seconds = poll_seconds
         self.hub_poll_seconds = hub_poll_seconds
         self.rediscover_seconds = rediscover_seconds
+        # aliases that ask for confirmation before switching off and are skipped by "All off" (e.g. a fridge)
+        self.protected = {a.strip().lower() for a in (protected or []) if a.strip()}
 
         self.tracked: dict[str, Tracked] = {}        # host -> Tracked
         self.by_id: dict[str, tuple[Device, Tracked]] = {}  # device id -> (device or child, parent)
@@ -86,6 +90,7 @@ class DeviceManager:
         self._listeners: list[Listener] = []
         self._snapshot_cache: str | None = None
         self._discover_task: asyncio.Task | None = None
+        self._energy_cache: tuple[float, list[dict]] | None = None
 
     # ------------------------------------------------------------------ lifecycle
     def subscribe(self, fn: Listener) -> None:
@@ -289,13 +294,78 @@ class DeviceManager:
     async def all_off(self) -> int:
         targets = [
             did for did, (dev, _) in self.by_id.items()
-            if (f := dev.features.get("state")) is not None and f.value
+            if (f := dev.features.get("state")) is not None and f.value and not self._protected(dev)
         ]
         results = await asyncio.gather(*(self.set_on(d, False) for d in targets), return_exceptions=True)
         for d, r in zip(targets, results):
             if isinstance(r, Exception):
                 log.warning("all_off failed for %s: %s", d, r)
         return len(targets)
+
+    # ------------------------------------------------------------------ energy history
+    ENERGY_CACHE_SECONDS = 300
+
+    async def energy_history(self) -> list[dict]:
+        """kWh per hour (last 7 days), day (last ~2 quarters) and month (this + last year) for every
+        energy-monitoring plug, read from the plug's own memory. Cached: the plug is slow to answer."""
+        now = time.time()
+        if self._energy_cache and now - self._energy_cache[0] < self.ENERGY_CACHE_SECONDS:
+            return self._energy_cache[1]
+        out = []
+        for tr in list(self.tracked.values()):
+            dev = tr.dev
+            if not tr.online or Module.Energy not in dev.modules:
+                continue
+            try:
+                out.append({"id": _device_id(dev), "name": dev.alias or dev.model, "kind": "plug",
+                            **await self._plug_history(dev)})
+            except Exception as e:  # noqa: BLE001
+                log.warning("Energy history for %s failed: %s", dev.alias, e)
+        self._energy_cache = (now, out)
+        return out
+
+    @staticmethod
+    async def _plug_history(dev: Device) -> dict:
+        async def query(start: dt.datetime, end: dt.datetime, interval: int) -> tuple[dt.datetime, list[int]]:
+            res = await dev.protocol.query({"get_energy_data": {
+                "start_timestamp": int(start.timestamp()), "end_timestamp": int(end.timestamp()), "interval": interval}})
+            data = res.get("get_energy_data", res)
+            return dt.datetime.fromtimestamp(data["start_timestamp"]), data.get("data") or []
+
+        now = dt.datetime.now()
+        today = dt.datetime.combine(dt.date.today(), dt.time())
+        hourly, daily, monthly = {}, {}, {}  # values in Wh from the plug, stored as kWh
+
+        start, data = await query(today - dt.timedelta(days=6), now, 60)  # max 7 days per request
+        for i, wh in enumerate(data):
+            t = start + dt.timedelta(hours=i)
+            if t <= now:
+                hourly[t.strftime("%Y-%m-%dT%H")] = wh / 1000
+
+        # daily data only comes a calendar quarter at a time, starting on the quarter's first day
+        def quarter(d: dt.date) -> dt.datetime:
+            return dt.datetime(d.year, 3 * ((d.month - 1) // 3) + 1, 1)
+        q = quarter((today - dt.timedelta(days=59)).date())
+        while q <= now:
+            nxt = dt.datetime(q.year + (q.month > 9), (q.month + 2) % 12 + 1, 1)
+            start, data = await query(q, min(nxt - dt.timedelta(seconds=1), now), 1440)
+            for i, wh in enumerate(data):
+                d = start.date() + dt.timedelta(days=i)
+                if d <= now.date():
+                    daily[d.isoformat()] = wh / 1000
+            q = nxt
+
+        for year in (now.year - 1, now.year):
+            start, data = await query(dt.datetime(year, 1, 1), min(dt.datetime(year, 12, 31, 23, 59, 59), now), 43200)
+            for i, wh in enumerate(data[:12]):
+                if (year, i + 1) <= (now.year, now.month):
+                    monthly[f"{year}-{i + 1:02d}"] = wh / 1000
+
+        energy = dev.modules[Module.Energy]
+        return {"hourly": hourly, "daily": daily, "monthly": monthly, "power_w": energy.current_consumption}
+
+    def _protected(self, dev: Device) -> bool:
+        return (dev.alias or "").strip().lower() in self.protected
 
     # ------------------------------------------------------------------ snapshot
     def _serialize(self, dev: Device, tr: Tracked, is_child: bool) -> dict:
@@ -323,6 +393,7 @@ class DeviceManager:
             "error": None if is_child else tr.error,
             "switchable": state is not None,
             "on": bool(state.value) if state is not None else None,
+            "confirm_off": self._protected(dev),
             "dimmable": bright is not None,
             "brightness": bright.value if bright is not None else None,
             "sensors": sensors,

@@ -5,6 +5,7 @@ Run:  python app.py   (reads .env if present)
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import logging
 import os
@@ -43,6 +44,7 @@ manager = DeviceManager(
     poll_seconds=float(os.getenv("POLL_SECONDS", "5")),
     hub_poll_seconds=float(os.getenv("HUB_POLL_SECONDS", "1.5")),
     rediscover_seconds=float(os.getenv("REDISCOVER_SECONDS", "300")),
+    protected=os.getenv("CONFIRM_OFF", "").split(","),
 )
 cameras = CameraManager(
     os.getenv("CAMERAS", ""),
@@ -349,6 +351,41 @@ async def brightness(device_id: str, body: BrightnessBody):
 @app.post("/api/scenes/all-off")
 async def all_off():
     return {"ok": True, "switched_off": await manager.all_off()}
+
+
+def _buckets(rng: str) -> list[tuple[str, str]]:
+    """(key, ISO start) for each bar of a chart range, oldest first."""
+    now = dt.datetime.now()
+    if rng == "24h":
+        hour = now.replace(minute=0, second=0, microsecond=0)
+        return [((t := hour - dt.timedelta(hours=i)).strftime("%Y-%m-%dT%H"), t.isoformat()) for i in range(23, -1, -1)]
+    if rng in ("7d", "30d"):
+        days = 7 if rng == "7d" else 30
+        return [((d := dt.date.today() - dt.timedelta(days=i)).isoformat(), d.isoformat()) for i in range(days - 1, -1, -1)]
+    months = [(now.year - (now.month - 1 - i < 0), (now.month - 1 - i) % 12 + 1) for i in range(11, -1, -1)]
+    return [(f"{y}-{m:02d}", f"{y}-{m:02d}-01") for y, m in months]
+
+
+@app.get("/api/energy")
+async def energy():
+    """kWh per device for each chart range. null = no data for that bar (before a device's history starts)."""
+    series = await manager.energy_history() + (tuya.energy_history() if tuya else [])
+    field = {"24h": "hourly", "7d": "daily", "30d": "daily", "12m": "monthly"}
+    ranges = {}
+    for rng, src in field.items():
+        buckets = _buckets(rng)
+        values = {}
+        for sr in series:
+            data = sr[src]
+            first = min(data) if data else None
+            values[sr["id"]] = [None if first is None or key < first[:len(key)] else round(data.get(key, 0.0), 4)
+                                for key, _ in buckets]
+        ranges[rng] = {"buckets": [start for _, start in buckets], "values": values}
+    return {
+        "price": float(os.getenv("ELECTRICITY_PRICE", "0")), "currency": os.getenv("CURRENCY", "€"),
+        "series": [{k: sr.get(k) for k in ("id", "name", "kind", "power_w", "since")} for sr in series],
+        "ranges": ranges,
+    }
 
 
 @app.get("/api/cameras")

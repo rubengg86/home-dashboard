@@ -125,7 +125,8 @@ class CloudHistory:
         self.source: str | None = None
         self.error: str | None = None
 
-    def daily_kwh(self, dev_id: str, scale: int, days: int = 30) -> dict[str, float]:
+    def daily_kwh(self, dev_id: str, scale: int, days: int = 30) -> tuple[dict[str, float], dict[str, float]]:
+        """Returns ({date: kWh}, {"YYYY-MM-DDTHH": kWh}); hourly comes from the device log only."""
         cloud = tinytuya.Cloud(**self.cfg)
         if getattr(cloud, "error", None):
             raise ConnectionError(f"Tuya cloud login failed: {cloud.error}")
@@ -137,32 +138,40 @@ class CloudHistory:
             "start_day": (today - dt.timedelta(days=days - 1)).strftime("%Y%m%d"),
             "end_day": today.strftime("%Y%m%d"),
         })
+        stats: dict[str, float] | None = None
         if isinstance(r, dict) and r.get("success") and isinstance((r.get("result") or {}).get("days"), dict):
             raw = {k: float(v) for k, v in r["result"]["days"].items() if v not in (None, "")}
             # the API normally returns kWh already; if values look unscaled, apply the DP scale
             if raw and max(raw.values()) > 100:
                 raw = {k: v / 10 ** scale for k, v in raw.items()}
-            self.source, self.error = "Tuya cloud statistics", None
-            return {f"{k[:4]}-{k[4:6]}-{k[6:]}": v for k, v in raw.items()}
+            stats = {f"{k[:4]}-{k[4:6]}-{k[6:]}": v for k, v in raw.items()}
         stats_msg = (r or {}).get("msg") if isinstance(r, dict) else str(r)
-        log.info("Tuya statistics API unavailable (%s), using device logs", stats_msg)
 
-        # 2) device log: sum add_ele increments per local day
+        # 2) device log: add_ele increments, summed per local day and hour
         r = cloud.getdevicelog(dev_id, start=-7, end=0, evtype=7, size=0, max_fetches=50)
         if not (isinstance(r, dict) and r.get("success")):
+            if stats is not None:
+                self.source, self.error = "Tuya cloud statistics", None
+                return stats, {}
             raise ConnectionError(f"Tuya cloud: statistics: {stats_msg}; logs: {(r or {}).get('msg') if isinstance(r, dict) else r}")
-        out: dict[str, float] = {}
+        daily: dict[str, float] = {}
+        hourly: dict[str, float] = {}
         for entry in (r.get("result") or {}).get("logs", []):
             if entry.get("code") != "add_ele":
                 continue
             try:
                 kwh = float(entry["value"]) / 10 ** scale
-                day = dt.datetime.fromtimestamp(int(entry["event_time"]) / 1000).date().isoformat()
+                t = dt.datetime.fromtimestamp(int(entry["event_time"]) / 1000)
             except (KeyError, ValueError, TypeError):
                 continue
-            out[day] = out.get(day, 0.0) + kwh
+            daily[t.date().isoformat()] = daily.get(t.date().isoformat(), 0.0) + kwh
+            hourly[t.strftime("%Y-%m-%dT%H")] = hourly.get(t.strftime("%Y-%m-%dT%H"), 0.0) + kwh
+        if stats is not None:
+            self.source, self.error = "Tuya cloud statistics", None
+            return stats, hourly
+        log.info("Tuya statistics API unavailable (%s), using device logs", stats_msg)
         self.source, self.error = "Tuya cloud device log (last 7 days)", None
-        return out
+        return daily, hourly
 
 
 class TuyaManager:
@@ -180,7 +189,9 @@ class TuyaManager:
         self.poll_seconds = poll_seconds
         self.price, self.currency = price_per_kwh, currency
         self.energy_file = energy_file
-        self.energy: dict[str, dict[str, float]] = self._load_energy()  # id -> {date: kWh}
+        self.energy: dict[str, dict[str, float]] = self._load_energy(energy_file)  # id -> {date: kWh}
+        self.hourly_file = energy_file.with_name(energy_file.stem + "_hourly.json")
+        self.hourly: dict[str, dict[str, float]] = self._load_energy(self.hourly_file)  # id -> {"YYYY-MM-DDTHH": kWh}
         self.devices: dict[str, TuyaSwitch] = {}
         for spec in json.loads(devices_file.read_text()):
             if spec.get("key") and not spec.get("sub"):
@@ -214,11 +225,15 @@ class TuyaManager:
             for d in self.devices.values():
                 try:
                     scale = d.dp.get("add_ele", ("", 3))[1]
-                    cloud = await asyncio.to_thread(self.history.daily_kwh, d.id, scale)
+                    cloud, cloud_hourly = await asyncio.to_thread(self.history.daily_kwh, d.id, scale)
                     per_day = self.energy.setdefault(d.id, {})
                     for day, kwh in cloud.items():
                         # cloud is authoritative for past days; for today keep whichever is further along
                         per_day[day] = max(kwh, per_day.get(day, 0.0)) if day == dt.date.today().isoformat() else kwh
+                    per_hour = self.hourly.setdefault(d.id, {})
+                    this_hour = dt.datetime.now().strftime("%Y-%m-%dT%H")
+                    for hour, kwh in cloud_hourly.items():
+                        per_hour[hour] = max(kwh, per_hour.get(hour, 0.0)) if hour == this_hour else kwh
                     self._save_energy()
                     log.info("Tuya %s: imported %d days of energy from %s (%.2f kWh)",
                              d.name, len(cloud), self.history.source, sum(cloud.values()))
@@ -270,9 +285,13 @@ class TuyaManager:
         last = self._last_poll.get(d.id)
         self._last_poll[d.id] = now
         if last and now - last < 60 and p > 0:
+            kwh = p * (now - last) / 3_600_000
             day = dt.date.today().isoformat()
             per_day = self.energy.setdefault(d.id, {})
-            per_day[day] = per_day.get(day, 0.0) + p * (now - last) / 3_600_000
+            per_day[day] = per_day.get(day, 0.0) + kwh
+            hour = dt.datetime.now().strftime("%Y-%m-%dT%H")
+            per_hour = self.hourly.setdefault(d.id, {})
+            per_hour[hour] = per_hour.get(hour, 0.0) + kwh
             if now - self._last_save > 60:
                 self._save_energy()
 
@@ -356,21 +375,41 @@ class TuyaManager:
         await self._publish()
 
     # ------------------------------------------------------------- energy storage
-    def _load_energy(self) -> dict:
+    @staticmethod
+    def _load_energy(path: Path) -> dict:
         try:
-            return json.loads(self.energy_file.read_text())
+            return json.loads(path.read_text())
         except Exception:  # noqa: BLE001
             return {}
 
+    @staticmethod
+    def _write(path: Path, data: dict, cutoff: str) -> None:
+        for per_key in data.values():
+            for k in [k for k in per_key if k < cutoff]:
+                del per_key[k]
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=1))
+        tmp.replace(path)
+
     def _save_energy(self) -> None:
-        cutoff = (dt.date.today() - dt.timedelta(days=60)).isoformat()
-        for per_day in self.energy.values():
-            for day in [k for k in per_day if k < cutoff]:
-                del per_day[day]
-        tmp = self.energy_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.energy, indent=1))
-        tmp.replace(self.energy_file)
+        # ~13 months of days so the yearly chart fills in over time; 8 days of hours
+        self._write(self.energy_file, self.energy, (dt.date.today() - dt.timedelta(days=400)).isoformat())
+        self._write(self.hourly_file, self.hourly, (dt.date.today() - dt.timedelta(days=8)).isoformat())
         self._last_save = time.time()
+
+    def energy_history(self) -> list[dict]:
+        """Same shape as DeviceManager.energy_history, for the energy chart."""
+        out = []
+        for d in self.devices.values():
+            daily = dict(self.energy.get(d.id, {}))
+            monthly: dict[str, float] = {}
+            for day, kwh in daily.items():
+                monthly[day[:7]] = monthly.get(day[:7], 0.0) + kwh
+            out.append({"id": d.id, "name": d.name, "kind": "heater", "hourly": dict(self.hourly.get(d.id, {})),
+                        "daily": daily, "monthly": monthly,
+                        "since": min(daily) if daily else None,  # months before this have no data here
+                        "power_w": d.power_w if d.online and d.is_on else 0 if d.online else None})
+        return out
 
     # ------------------------------------------------------------- snapshot
     def _serialize(self, d: TuyaSwitch) -> dict:

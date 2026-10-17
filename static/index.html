@@ -163,6 +163,65 @@
   #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--bg);
            padding: 10px 16px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 20; }
   #toast.show { opacity: 1; transform: translateX(-50%); }
+  /* ---------- electricity chart (right column) */
+  #energy { margin-top: 24px; }
+  .ecard { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
+           /* categorical slots in fixed order (validated light + dark); text never wears these */
+           --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; }
+  @media (prefers-color-scheme: dark) { .ecard { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; } }
+  .eseg { display: inline-flex; background: var(--card-2); border-radius: 999px; padding: 3px; gap: 2px; }
+  .eseg button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+  .eseg button.active { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  .ebar { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .estats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .estat .v { font-size: 18px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .estat .l { font-size: 11.5px; color: var(--muted); }
+  @media (max-width: 420px) { .estats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .eplot { position: relative; }
+  .eplot svg { display: block; width: 100%; overflow: visible; outline: none; }
+  .eplot svg:focus-visible { box-shadow: 0 0 0 2px var(--accent); border-radius: 6px; }
+  .eplot text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .eplot .grid-l { stroke: var(--line); stroke-width: 1; }
+  .eplot .base-l { stroke: var(--muted); stroke-opacity: .5; stroke-width: 1; }
+  .eplot .col-hl { fill: var(--ink); opacity: 0; }
+  .eplot .col-hl.on { opacity: .06; }
+  .eplot .seg { stroke: var(--card); stroke-width: 0; }
+  .eplot .dim .seg { opacity: .45; }
+  .etip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 20px rgba(0, 0, 0, .14); width: max-content; max-width: 100%; z-index: 2;
+          opacity: 0; transition: opacity .1s; }
+  .etip.show { opacity: 1; }
+  .etip .t { color: var(--muted); margin-bottom: 6px; }
+  .etip .r { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+  .etip .r i { width: 10px; height: 2px; border-radius: 1px; flex: none; }
+  .etip .r .n { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .etip .r b { font-variant-numeric: tabular-nums; }
+  .etip .tot { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
+  .etip .note { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  .elegend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12.5px; }
+  .elegend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+  .elegend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .elegend b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .etable { margin-top: 10px; font-size: 12.5px; }
+  .etable summary { cursor: pointer; color: var(--muted); }
+  .etable .wrap { max-height: 240px; overflow: auto; margin-top: 8px; }
+  .etable table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .etable th, .etable td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .etable th:first-child, .etable td:first-child { text-align: left; }
+  .etable th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+  /* ---------- confirm dialog */
+  #confirm { border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); background: var(--card); color: var(--ink);
+             padding: 0; width: min(360px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+  #confirm form { padding: 22px; }
+  #confirm::backdrop { background: rgba(20, 20, 18, .45); }
+  #confirm[open] { animation: pop .16s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: scale(.96); } }
+  #confirm .ico { margin-bottom: 14px; background: var(--on-soft); color: var(--on); }
+  #confirm h3 { margin: 0 0 6px; font-size: 17px; font-weight: 650; }
+  #confirm p { margin: 0 0 20px; font-size: 14px; color: var(--muted); line-height: 1.45; }
+  #confirm .acts { display: flex; gap: 8px; justify-content: flex-end; }
+  #confirm .btn { box-shadow: none; }
+  #confirm .btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 </style>
 </head>
 <body>
@@ -200,6 +259,23 @@
     <section id="cameras" hidden>
       <h2>Cameras</h2>
       <div class="cams" id="camgrid"></div>
+    </section>
+    <section id="energy" hidden>
+      <h2>Electricity <span class="count" id="esub"></span></h2>
+      <div class="ecard">
+        <div class="ebar">
+          <div class="eseg" id="erange" role="group" aria-label="Time range">
+            <button data-r="24h">24 h</button><button data-r="7d">7 days</button><button data-r="30d" class="active">30 days</button><button data-r="12m">12 months</button>
+          </div>
+          <div class="eseg" id="eunit" role="group" aria-label="Unit" hidden>
+            <button data-u="kwh" class="active">kWh</button><button data-u="cost" id="ecostbtn">€</button>
+          </div>
+        </div>
+        <div class="estats" id="estats"></div>
+        <div class="eplot" id="eplot"><div class="etip" id="etip" role="status"></div></div>
+        <div class="elegend" id="elegend"></div>
+        <details class="etable" id="etable"><summary>Show as table</summary><div class="wrap"></div></details>
+      </div>
     </section>
   </aside>
 </main>
@@ -249,6 +325,17 @@
   </div>
 </div>
 <div id="toast" role="status"></div>
+<dialog id="confirm" aria-labelledby="confirmtitle" aria-describedby="confirmtext">
+  <form method="dialog">
+    <div class="ico" id="confirmico"></div>
+    <h3 id="confirmtitle"></h3>
+    <p id="confirmtext"></p>
+    <div class="acts">
+      <button class="btn" value="cancel" autofocus>Cancel</button>
+      <button class="btn danger" value="ok" id="confirmok"></button>
+    </div>
+  </form>
+</dialog>
 
 <script>
 const $ = (s) => document.querySelector(s);
@@ -334,9 +421,11 @@ function render() {
   const hubs = devices.filter((d) => d.children && d.children.length);
   const rest = devices.filter((d) => !(d.children && d.children.length));
   const onCount = (list) => list.filter((d) => d.on).length;
-  let html = "";
-  if (rest.length) html += `<h2>Lights &amp; plugs <span class="count">${onCount(rest)} of ${rest.length} on</span></h2>
-    <div class="grid">${rest.map((d) => tile(d)).join("")}</div>`;
+  // plugs carry energy readings and make much taller tiles, so they get their own row
+  const isLight = (d) => iconFor(d) === ICONS.bulb;
+  const section = (title, list) => list.length ? `<h2>${title} <span class="count">${onCount(list)} of ${list.length} on</span></h2>
+    <div class="grid">${list.map((d) => tile(d)).join("")}</div>` : "";
+  let html = section("Lights", rest.filter(isLight)) + section("Plugs", rest.filter((d) => !isLight(d)));
   for (const h of hubs) {
     html += `<h2>${esc(h.alias)} <span class="count">${h.children.length} paired</span></h2>
       <div class="hub">
@@ -351,6 +440,18 @@ function render() {
   root.innerHTML = html;
 }
 
+// Resolves true only when the user presses the confirm button (Cancel, Esc and backdrop click deny).
+function askConfirm({ title, text, ok = "OK", icon = "" }) {
+  const dlg = $("#confirm");
+  $("#confirmtitle").textContent = title;
+  $("#confirmtext").textContent = text;
+  $("#confirmok").textContent = ok;
+  $("#confirmico").innerHTML = icon;
+  dlg.returnValue = "";
+  dlg.showModal();
+  return new Promise((resolve) => dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok"), { once: true }));
+}
+$("#confirm").addEventListener("click", (e) => { if (e.target.id === "confirm") e.target.close(); });  // backdrop
 function findDevice(id) {
   for (const d of devices) {
     if (d.id === id) return d;
@@ -363,6 +464,9 @@ $("#devices").addEventListener("click", async (ev) => {
   if (!el || el.disabled) return;
   const id = el.closest(".tile").dataset.id;
   const d = findDevice(id);
+  if (d && d.on && d.confirm_off && !await askConfirm({
+    title: `Switch off ${d.alias}?`, text: "This device is protected so it isn't switched off by accident.",
+    ok: "Switch off", icon: iconFor(d) })) return;
   if (d) { d.on = !d.on; render(); }  // optimistic
   try { await api(`/api/devices/${encodeURIComponent(id)}/toggle`); }
   catch (e) { if (d) { d.on = !d.on; render(); } toast(e.message); }
@@ -527,6 +631,7 @@ function connect() {
     else if (msg.type === "event") onEvent(msg.event);
     else if (msg.type === "appliances") renderAppliances(msg);
     else if (msg.type === "tuya") renderTuya(msg.devices);
+    if (msg.type === "devices" || msg.type === "tuya") renderEnergyNow();
   };
   ws.onclose = () => {
     clearInterval(ping);
@@ -771,6 +876,249 @@ $("#recvideo").addEventListener("error", () => {
 });
 
 loadCameras();
+
+// ---------------------------------------------------------------- electricity chart
+const energy = { data: null, range: "30d", unit: "kwh", active: null };
+const RANGE_INFO = {
+  "24h": { per: "hour", avg: "Avg / hour" }, "7d": { per: "day", avg: "Avg / day" },
+  "30d": { per: "day", avg: "Avg / day" }, "12m": { per: "month", avg: "Avg / month" },
+};
+const svgNS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(svgNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+const fmtKWh = (v, fine) => v == null ? "–" : `${v.toFixed(fine || v < 10 ? (fine && v < 1 ? 3 : 2) : 1)} kWh`;
+const fmtCost = (v) => v == null ? "–" : `${energy.data.currency}${v.toFixed(2)}`;
+
+async function loadEnergy() {
+  try {
+    energy.data = await getJSON("/api/energy");
+    $("#energy").hidden = !energy.data.series.length;
+    const priced = energy.data.price > 0;
+    $("#eunit").hidden = !priced;
+    $("#ecostbtn").textContent = energy.data.currency;
+    if (!priced) energy.unit = "kwh";
+    renderEnergy();
+  } catch (e) { console.warn("energy", e); }
+}
+
+function bucketLabel(iso, rng, long) {
+  const d = new Date(iso);
+  if (rng === "24h") {
+    const h = d.getHours(), pad = (n) => String(n).padStart(2, "0");
+    return long ? `${d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · ${pad(h)}:00–${pad((h + 1) % 24)}:00` : pad(h);
+  }
+  if (rng === "12m") return d.toLocaleDateString([], long ? { month: "long", year: "numeric" } : { month: "short" });
+  if (rng === "7d" && !long) return d.toLocaleDateString([], { weekday: "short" });
+  return d.toLocaleDateString([], long ? { weekday: "short", day: "numeric", month: "short", year: "numeric" } : { day: "numeric", month: "short" });
+}
+
+// smallest axis top >= v made of 3-5 round steps (1, 2, 2.5 or 5 x 10^k)
+function niceScale(v) {
+  if (!(v > 0)) return { max: 1, step: 0.25 };
+  let best = null;
+  for (let k = Math.floor(Math.log10(v)) - 2; k <= Math.floor(Math.log10(v)) + 1; k++)
+    for (const m of [1, 2, 2.5, 5]) for (const ticks of [3, 4, 5]) {
+      const step = m * 10 ** k, max = step * ticks;
+      if (max >= v && (!best || max < best.max)) best = { max, step };
+    }
+  return best;
+}
+const stepDecimals = (step) => { let d = 0; while (d < 6 && Math.abs(step * 10 ** d - Math.round(step * 10 ** d)) > 1e-9) d++; return d; };
+
+function energyRows() {
+  const { data, range } = energy, r = data.ranges[range];
+  const k = energy.unit === "cost" ? data.price : 1;
+  return r.buckets.map((iso, i) => {
+    const vals = data.series.map((s) => r.values[s.id][i]);
+    const known = vals.filter((v) => v != null);
+    return { iso, vals, kwh: known.length ? known.reduce((a, b) => a + b, 0) : null, scale: k };
+  });
+}
+
+function renderEnergy() {
+  const { data, range } = energy;
+  if (!data) return;
+  document.querySelectorAll("#erange button").forEach((b) => b.classList.toggle("active", b.dataset.r === range));
+  document.querySelectorAll("#eunit button").forEach((b) => b.classList.toggle("active", b.dataset.u === energy.unit));
+  const rows = energyRows(), price = data.price, cost = energy.unit === "cost";
+  const fine = range === "24h";
+
+  // stats
+  const withData = rows.filter((r) => r.kwh != null);
+  const total = withData.reduce((a, r) => a + r.kwh, 0);
+  const avg = withData.length ? total / withData.length : null;
+  const stats = [
+    ["Total", fmtKWh(total, fine)],
+    ["Cost", price > 0 ? fmtCost(total * price) : "–"],
+    [RANGE_INFO[range].avg, cost && price > 0 ? fmtCost(avg * price) : fmtKWh(avg, fine)],
+    ["Now", `<span id="enow">–</span>`],
+  ];
+  $("#estats").innerHTML = stats.map(([l, v]) => `<div class="estat"><div class="v">${v}</div><div class="l">${esc(l)}</div></div>`).join("");
+  renderEnergyNow();
+  $("#esub").textContent = price > 0 ? `${data.currency}${price.toFixed(2)} / kWh` : "";
+
+  // legend: range total per device, color follows the device (fixed slot by order from the API)
+  const legend = $("#elegend"); legend.textContent = "";
+  data.series.forEach((s, si) => {
+    const sum = rows.reduce((a, r) => a + (r.vals[si] || 0), 0);
+    const item = document.createElement("span");
+    const sw = document.createElement("i"); sw.style.background = `var(--s${si % 4 + 1})`;
+    const name = document.createElement("span"); name.textContent = s.name;
+    const val = document.createElement("b"); val.textContent = cost && price > 0 ? fmtCost(sum * price) : fmtKWh(sum, fine);
+    item.append(sw, name, val); legend.appendChild(item);
+  });
+
+  drawEnergyChart(rows);
+  renderEnergyTable(rows);
+}
+
+function drawEnergyChart(rows) {
+  const plot = $("#eplot"), tip = $("#etip");
+  plot.querySelector("svg")?.remove();
+  const { data, range } = energy, cost = energy.unit === "cost" && data.price > 0;
+  const W = Math.max(260, plot.clientWidth), H = 204, padL = 44, padR = 4, padT = 22, padB = 22;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const scaled = (v) => (v || 0) * (cost ? data.price : 1);
+  const { max, step } = niceScale(Math.max(0, ...rows.map((r) => scaled(r.kwh))));
+  const dec = stepDecimals(step);
+  const y = (v) => padT + ih - (v / max) * ih;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, tabindex: 0, role: "img",
+    "aria-label": `Electricity use, ${$("#erange .active").textContent}. Use arrow keys to read each bar.` });
+
+  // grid + y labels, unit above the axis
+  for (let i = 0; i * step <= max + 1e-9; i++) {
+    const v = i * step, yy = Math.round(y(v)) + 0.5;
+    el("line", { x1: padL, x2: W - padR, y1: yy, y2: yy, class: i ? "grid-l" : "base-l" }, svg);
+    const t = el("text", { x: padL - 6, y: yy + 3.5, "text-anchor": "end" }, svg);
+    t.textContent = v.toFixed(dec);
+  }
+  el("text", { x: padL - 6, y: 10, "text-anchor": "end" }, svg).textContent = cost ? data.currency : "kWh";
+
+  const n = rows.length, slot = iw / n, gap = Math.max(2, Math.min(slot * 0.28, 10)), bw = Math.max(1, slot - gap);
+  const every = range === "24h" ? 6 : range === "30d" ? 7 : 1;
+  const bars = el("g", {}, svg);
+  const hls = [];
+  rows.forEach((r, i) => {
+    const x = padL + i * slot + gap / 2;
+    hls.push(el("rect", { x: padL + i * slot, y: padT, width: slot, height: ih, class: "col-hl", rx: 4 }, bars));
+    // stacked segments, bottom-up, with a 2px surface gap between them; rounded 4px data-end on top only
+    let acc = 0;
+    const segs = r.vals.map((v, si) => ({ v: scaled(v), si })).filter((s) => s.v > 0);
+    segs.forEach((s, k) => {
+      const y0 = y(acc), y1 = y(acc + s.v); acc += s.v;
+      const top = k === segs.length - 1, h = Math.max(0, y0 - y1 - (top ? 0 : 2));
+      if (h <= 0) return;
+      const rr = top ? Math.min(4, bw / 2, h) : 0, yt = y0 - h;
+      el("path", { class: "seg", fill: `var(--s${s.si % 4 + 1})`,
+        d: `M${x},${y0} V${yt + rr} Q${x},${yt} ${x + rr},${yt} H${x + bw - rr} Q${x + bw},${yt} ${x + bw},${yt + rr} V${y0} Z` }, bars);
+    });
+    if (i % every === (n - 1) % every) {
+      const t = el("text", { x: x + bw / 2, y: H - 6, "text-anchor": "middle" }, svg);
+      t.textContent = bucketLabel(r.iso, range, false);
+    }
+  });
+  // hit targets: the whole column (bigger than the bar), on top of everything
+  const hits = el("g", {}, svg);
+  rows.forEach((r, i) => {
+    const hit = el("rect", { x: padL + i * slot, y: 0, width: slot, height: H, fill: "transparent" }, hits);
+    hit.addEventListener("pointerenter", () => showTip(i));
+  });
+  svg.addEventListener("pointerleave", () => showTip(null));
+  svg.addEventListener("focus", () => showTip(energy.active ?? n - 1));
+  svg.addEventListener("blur", () => showTip(null));
+  svg.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    showTip(Math.max(0, Math.min(n - 1, (energy.active ?? n) + (e.key === "ArrowLeft" ? -1 : 1))));
+  });
+  plot.insertBefore(svg, tip);
+
+  function showTip(i) {
+    energy.active = i;
+    hls.forEach((h, k) => h.classList.toggle("on", k === i));
+    bars.classList.toggle("dim", i != null);
+    bars.querySelectorAll(".seg").forEach((s) => s.style.opacity = "");
+    if (i == null) { tip.classList.remove("show"); return; }
+    // the hovered column keeps full strength, the rest recede
+    const xL = padL + i * slot, xR = xL + slot;
+    bars.querySelectorAll(".seg").forEach((s) => {
+      const bx = s.getBBox(); if (bx.x >= xL - 0.5 && bx.x + bx.width <= xR + 0.5) s.style.opacity = "1";
+    });
+    const r = rows[i], price = data.price;
+    tip.textContent = "";
+    const head = document.createElement("div"); head.className = "t";
+    const isNow = i === n - 1;
+    head.textContent = bucketLabel(r.iso, range, true) + (isNow ? " · so far" : "");
+    tip.appendChild(head);
+    const line = (color, name, kwh, cls) => {
+      const row = document.createElement("div"); row.className = "r" + (cls ? ` ${cls}` : "");
+      const key = document.createElement("i"); if (color) key.style.background = color; else key.style.visibility = "hidden";
+      const nm = document.createElement("span"); nm.className = "n"; nm.textContent = name;
+      const val = document.createElement("b");
+      val.textContent = kwh == null ? "no data" : price > 0 ? `${fmtKWh(kwh, true)} · ${fmtCost(kwh * price)}` : fmtKWh(kwh, true);
+      row.append(key, nm, val); tip.appendChild(row);
+    };
+    data.series.forEach((s, si) => line(`var(--s${si % 4 + 1})`, s.name, r.vals[si]));
+    if (data.series.length > 1) line(null, "Total", r.kwh, "tot");
+    const missing = data.series.filter((s, si) => r.vals[si] == null).map((s) => s.name);
+    if (missing.length) {
+      const note = document.createElement("div"); note.className = "note";
+      note.textContent = `No history yet for ${missing.join(", ")} here.`;
+      tip.appendChild(note);
+    }
+    // position: beside the column (right if it fits, else left) so it never covers the hovered bar
+    tip.classList.add("show");
+    const scale = plot.clientWidth / W, tw = tip.offsetWidth;
+    const right = xR * scale + 8, left = xL * scale - tw - 8;
+    tip.style.left = `${right + tw <= plot.clientWidth ? right : Math.max(0, left)}px`;
+    tip.style.top = `${padT * scale}px`;
+  }
+}
+
+function renderEnergyTable(rows) {
+  const { data, range } = energy, price = data.price, fine = range === "24h";
+  const t = document.createElement("table");
+  const head = t.createTHead().insertRow();
+  for (const h of [RANGE_INFO[range].per[0].toUpperCase() + RANGE_INFO[range].per.slice(1), ...data.series.map((s) => s.name), "Total", ...(price > 0 ? ["Cost"] : [])]) {
+    const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+  }
+  const body = t.createTBody();
+  for (const r of [...rows].reverse()) {
+    const tr = body.insertRow();
+    for (const v of [bucketLabel(r.iso, range, true), ...r.vals.map((v) => v == null ? "–" : fmtKWh(v, fine)), fmtKWh(r.kwh, fine),
+                     ...(price > 0 ? [r.kwh == null ? "–" : fmtCost(r.kwh * price)] : [])]) tr.insertCell().textContent = v;
+  }
+  const wrap = $("#etable .wrap"); wrap.textContent = ""; wrap.appendChild(t);
+}
+
+// live power: straight from the websocket snapshots, so it updates every poll
+function renderEnergyNow() {
+  const out = $("#enow");
+  if (!out || !energy.data) return;
+  let w = 0, any = false;
+  for (const s of energy.data.series) {
+    const d = s.kind === "heater" ? tuyaDevices.find((t) => t.id === s.id) : findDevice(s.id);
+    const p = s.kind === "heater" ? (d && d.online ? (d.on ? d.power_w || 0 : 0) : null)
+                                  : d?.sensors?.find((x) => x.id === "current_consumption")?.value;
+    if (typeof p === "number") { w += p; any = true; }
+  }
+  out.textContent = any ? fmtKW(w) : "–";
+}
+
+$("#erange").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  energy.range = b.dataset.r; energy.active = null; renderEnergy();
+});
+$("#eunit").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  energy.unit = b.dataset.u; renderEnergy();
+});
+new ResizeObserver(() => energy.data && drawEnergyChart(energyRows())).observe($("#eplot"));
+loadEnergy(); setInterval(loadEnergy, 5 * 60 * 1000);
 </script>
 </body>
 </html>

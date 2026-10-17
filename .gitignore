@@ -8,6 +8,7 @@ tinytuya.json
 snapshot.json
 tuya-raw.json
 .tuya_energy.json
+.tuya_energy_hourly.json
 .idea/
 .DS_Store
 *.tmp
