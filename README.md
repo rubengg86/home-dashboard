@@ -33,6 +33,7 @@ docker compose logs -f
 
 - `PORT` in `data/.env` is ignored; set `DASHBOARD_PORT=...` in the shell (or a `.env` next to `docker-compose.yml`) to change it.
 - The container runs as UID/GID 1000. If `data/` belongs to another user, set `DASHBOARD_UID`/`DASHBOARD_GID` (`id -u`, `id -g`).
+- Login: set `DASHBOARD_USER` / `DASHBOARD_PASS` in `data/.env` (HTTP Basic auth on the page, API, camera streams and WebSocket; `/healthz` stays open for the healthcheck). It's plain HTTP, so keep it on the LAN or put HTTPS in front if you expose it.
 - Run only one dashboard at a time: two instances polling the same plug log each other out (403 errors) and the Tuya switch only accepts one local connection.
 - Update: re-run the `rsync` line, then `docker compose up -d --build` on the server.
 

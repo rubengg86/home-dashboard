@@ -5,11 +5,13 @@ Run:  python app.py   (reads .env if present)
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime as dt
 import json
 import logging
 import os
 import re
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -205,6 +207,40 @@ async def publish_event(ev: dict) -> None:
 
 
 app = FastAPI(title="Tapo Dashboard", lifespan=lifespan)
+
+
+class BasicAuth:
+    """HTTP Basic auth on everything (page, API, camera streams, WebSocket) when DASHBOARD_USER and
+    DASHBOARD_PASS are set. /healthz stays open for the Docker healthcheck."""
+
+    def __init__(self, app, user: str, password: str) -> None:
+        self.app = app
+        self.expected = base64.b64encode(f"{user}:{password}".encode()).decode()
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket") or scope["path"] == "/healthz":
+            return await self.app(scope, receive, send)
+        header = dict(scope["headers"]).get(b"authorization", b"").decode("latin-1")
+        scheme, _, token = header.partition(" ")
+        if scheme.lower() == "basic" and secrets.compare_digest(token.strip(), self.expected):
+            return await self.app(scope, receive, send)
+        if scope["type"] == "websocket":
+            return await send({"type": "websocket.close", "code": 1008})
+        await send({"type": "http.response.start", "status": 401,
+                    "headers": [(b"www-authenticate", b'Basic realm="Home dashboard", charset="UTF-8"'),
+                                (b"content-type", b"text/plain")]})
+        await send({"type": "http.response.body", "body": b"Login required"})
+
+
+if os.getenv("DASHBOARD_USER") and os.getenv("DASHBOARD_PASS"):
+    app.add_middleware(BasicAuth, user=os.environ["DASHBOARD_USER"], password=os.environ["DASHBOARD_PASS"])
+else:
+    log.warning("DASHBOARD_USER / DASHBOARD_PASS not set: the dashboard is open to anyone on the network")
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"ok": True}
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 

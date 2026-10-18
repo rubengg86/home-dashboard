@@ -19,6 +19,6 @@ ENV DATA_DIR=/data \
 VOLUME /data
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8811\")}/api/devices', timeout=4)"
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"8811\")}/healthz', timeout=4)"
 
 CMD ["python", "app.py"]
