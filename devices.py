@@ -9,10 +9,12 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import enum
+import json
 import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from kasa import Credentials, Device, Discover, Feature, Module
@@ -73,6 +75,7 @@ class DeviceManager:
         hub_poll_seconds: float = 1.5,
         rediscover_seconds: float = 300,
         protected: list[str] | None = None,
+        energy_file: Path | None = None,
     ) -> None:
         self.creds = Credentials(username, password)
         self.hosts = [h.strip() for h in (hosts or []) if h.strip()]
@@ -90,7 +93,11 @@ class DeviceManager:
         self._listeners: list[Listener] = []
         self._snapshot_cache: str | None = None
         self._discover_task: asyncio.Task | None = None
-        self._energy_cache: tuple[float, list[dict]] | None = None
+        # plug energy history, merged from each plug's memory and kept on disk: survives restarts and
+        # outlives the plug's own window (7 days of hours). id -> {name, hourly, daily, monthly, fetched_at}
+        self.energy_file = energy_file
+        self._plug_energy: dict[str, dict] = self._load_plug_energy()
+        self._energy_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------ lifecycle
     def subscribe(self, fn: Listener) -> None:
@@ -306,23 +313,67 @@ class DeviceManager:
     ENERGY_CACHE_SECONDS = 300
 
     async def energy_history(self) -> list[dict]:
-        """kWh per hour (last 7 days), day (last ~2 quarters) and month (this + last year) for every
-        energy-monitoring plug, read from the plug's own memory. Cached: the plug is slow to answer."""
-        now = time.time()
-        if self._energy_cache and now - self._energy_cache[0] < self.ENERGY_CACHE_SECONDS:
-            return self._energy_cache[1]
-        out = []
-        for tr in list(self.tracked.values()):
-            dev = tr.dev
-            if not tr.online or Module.Energy not in dev.modules:
-                continue
-            try:
-                out.append({"id": _device_id(dev), "name": dev.alias or dev.model, "kind": "plug",
-                            **await self._plug_history(dev)})
-            except Exception as e:  # noqa: BLE001
-                log.warning("Energy history for %s failed: %s", dev.alias, e)
-        self._energy_cache = (now, out)
-        return out
+        """kWh per hour, day and month for every energy-monitoring plug. Each plug is re-read from its own
+        memory at most every ENERGY_CACHE_SECONDS (it's slow to answer); a plug that isn't discovered yet
+        or fails to answer keeps its saved history and is retried on the next call."""
+        async with self._energy_lock:  # one read per plug even if several clients ask at once
+            now, changed = time.time(), False
+            for tr in list(self.tracked.values()):
+                dev = tr.dev
+                if not tr.online or Module.Energy not in dev.modules:
+                    continue
+                did = _device_id(dev)
+                rec = self._plug_energy.get(did)
+                if rec and now - rec.get("fetched_at", 0) < self.ENERGY_CACHE_SECONDS:
+                    continue
+                try:
+                    fresh = await self._plug_history(dev)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("Energy history for %s failed, using the saved one: %s", dev.alias, e)
+                    continue
+                rec = self._plug_energy.setdefault(did, {"hourly": {}, "daily": {}, "monthly": {}})
+                for k in ("hourly", "daily", "monthly"):
+                    rec[k].update(fresh[k])  # the plug is authoritative for what it still remembers
+                rec["name"], rec["fetched_at"] = dev.alias or dev.model, now
+                changed = True
+            if changed:
+                self._save_plug_energy()
+            return [{"id": did, "name": rec.get("name") or did, "kind": "plug",
+                     "hourly": rec["hourly"], "daily": rec["daily"], "monthly": rec["monthly"],
+                     "power_w": self._live_power(did)} for did, rec in self._plug_energy.items()]
+
+    def _live_power(self, did: str) -> float | None:
+        found = self.by_id.get(did)
+        if not found or not found[1].online or Module.Energy not in found[0].modules:
+            return None
+        return found[0].modules[Module.Energy].current_consumption
+
+    def _load_plug_energy(self) -> dict:
+        if not self.energy_file:
+            return {}
+        try:
+            return json.loads(self.energy_file.read_text())
+        except FileNotFoundError:
+            return {}
+        except Exception as e:  # noqa: BLE001
+            log.error("Could not read %s: %s", self.energy_file, e)
+            return {}
+
+    def _save_plug_energy(self) -> None:
+        if not self.energy_file:
+            return
+        today = dt.date.today()
+        cut = {"hourly": (today - dt.timedelta(days=8)).isoformat(), "daily": (today - dt.timedelta(days=400)).isoformat(),
+               "monthly": f"{today.year - 3}-{today.month:02d}"}
+        for rec in self._plug_energy.values():
+            for k, c in cut.items():
+                rec[k] = {key: v for key, v in rec[k].items() if key >= c}
+        tmp = self.energy_file.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps(self._plug_energy, indent=1))
+            tmp.replace(self.energy_file)
+        except OSError as e:
+            log.error("Could not save plug energy history to %s: %s", self.energy_file, e)
 
     @staticmethod
     async def _plug_history(dev: Device) -> dict:

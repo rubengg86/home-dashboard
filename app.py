@@ -56,6 +56,7 @@ manager = DeviceManager(
     hub_poll_seconds=float(os.getenv("HUB_POLL_SECONDS", "1.5")),
     rediscover_seconds=float(os.getenv("REDISCOVER_SECONDS", "300")),
     protected=os.getenv("CONFIRM_OFF", "").split(","),
+    energy_file=DATA / ".plug_energy.json",
 )
 cameras = CameraManager(
     os.getenv("CAMERAS", ""),
