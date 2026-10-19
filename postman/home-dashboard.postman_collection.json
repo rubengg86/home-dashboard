@@ -1,0 +1,1490 @@
+{
+  "info": {
+    "_postman_id": "5093cd17-9fab-5758-9081-55418077cd05",
+    "name": "Home Dashboard API (v1)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Mobile app API of the home dashboard (`/api/v1`).\n\n1. Import the collection and the **Home Dashboard** environment, select the environment and set `password`.\n2. Run **Auth > Login**. Every other request then sends `Authorization: Bearer {{access_token}}`, refreshed automatically before it expires.\n3. The *List* requests fill `device_id`, `tuya_id`, `camera_id`, etc. with the first item, so the action requests work straight away.\n\n**WebSocket** (live updates): Postman > New > WebSocket, URL `ws://<server>:8811/api/v1/ws?token=<stream token>` (get one with **Auth > Stream token**). Messages: `devices`, `tuya`, `appliances`, `events`, `event`.\n\nInteractive docs: `{{base_url}}/docs` (browser login)."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Keeps the Bearer token fresh: refreshes it a minute before it expires (refresh tokens rotate,",
+          "// so the new one is stored), and fetches a stream token for requests that use ?token={{stream_token}}.",
+          "const url = pm.request.url.toString();",
+          "const base = pm.variables.get(\"base_url\");",
+          "if (/\\/auth\\/(login|refresh)$/.test(url)) return;",
+          "",
+          "function refreshAccess(next) {",
+          "  const rt = pm.collectionVariables.get(\"refresh_token\");",
+          "  const exp = Number(pm.collectionVariables.get(\"access_expires_at\") || 0);",
+          "  if (!rt || exp - Date.now() > 60000) return next();",
+          "  pm.sendRequest({ url: base + \"/api/v1/auth/refresh\", method: \"POST\",",
+          "    header: { \"Content-Type\": \"application/json\" },",
+          "    body: { mode: \"raw\", raw: JSON.stringify({ refresh_token: rt }) } }, (err, res) => {",
+          "    if (!err && res.code === 200) {",
+          "      const t = res.json();",
+          "      pm.collectionVariables.set(\"access_token\", t.access_token);",
+          "      pm.collectionVariables.set(\"refresh_token\", t.refresh_token);",
+          "      pm.collectionVariables.set(\"access_expires_at\", String(Date.now() + t.expires_in * 1000));",
+          "    } else {",
+          "      console.warn(\"Token refresh failed, run Auth > Login again\", err || res.code);",
+          "    }",
+          "    next();",
+          "  });",
+          "}",
+          "",
+          "function streamToken() {",
+          "  if (!url.includes(\"{{stream_token}}\") && !url.includes(\"token=\")) return;",
+          "  const exp = Number(pm.collectionVariables.get(\"stream_expires_at\") || 0);",
+          "  if (pm.collectionVariables.get(\"stream_token\") && exp - Date.now() > 30000) return;",
+          "  pm.sendRequest({ url: base + \"/api/v1/auth/stream-token\", method: \"GET\",",
+          "    header: { Authorization: \"Bearer \" + pm.collectionVariables.get(\"access_token\") } }, (err, res) => {",
+          "    if (!err && res.code === 200) {",
+          "      const t = res.json();",
+          "      pm.collectionVariables.set(\"stream_token\", t.token);",
+          "      pm.collectionVariables.set(\"stream_expires_at\", String(Date.now() + t.expires_in * 1000));",
+          "    }",
+          "  });",
+          "}",
+          "",
+          "refreshAccess(streamToken);"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "access_expires_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stream_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "stream_expires_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "device_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dimmable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tuya_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "camera_id",
+      "value": "yi-camera",
+      "type": "string"
+    },
+    {
+      "key": "recording_dir",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "recording_path",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Log in once with **Login**; the collection then sends the Bearer token on every request and refreshes it automatically.",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Log in with the dashboard user (DASHBOARD_USER / DASHBOARD_PASS). Saves `access_token` (1 h) and `refresh_token` (90 days) into the collection variables.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"device_name\": \"{{device_name}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"tokens returned\", () => pm.expect(res.access_token).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"access_token\", res.access_token);",
+                  "pm.collectionVariables.set(\"refresh_token\", res.refresh_token);",
+                  "pm.collectionVariables.set(\"session_id\", res.session_id);",
+                  "pm.collectionVariables.set(\"access_expires_at\", String(Date.now() + res.expires_in * 1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh tokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Swap the refresh token for new tokens. Refresh tokens are single use: the new one is stored; re-sending an old one revokes the session. The collection does this for you before the access token expires.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"tokens returned\", () => pm.expect(res.access_token).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"access_token\", res.access_token);",
+                  "pm.collectionVariables.set(\"refresh_token\", res.refresh_token);",
+                  "pm.collectionVariables.set(\"session_id\", res.session_id);",
+                  "pm.collectionVariables.set(\"access_expires_at\", String(Date.now() + res.expires_in * 1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Who is logged in, on which session.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stream token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "15-min read-only token for `?token=` on camera snapshot/live/clips and the WebSocket (they can't send headers). The media requests below fetch it automatically.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/stream-token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "stream-token"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json();",
+                  "pm.collectionVariables.set(\"stream_token\", t.token);",
+                  "pm.collectionVariables.set(\"stream_expires_at\", String(Date.now() + t.expires_in * 1000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Every logged-in app install. `current: true` is this one.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sessions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const other = pm.response.json().find((s) => !s.current);",
+                  "if (other) pm.collectionVariables.set(\"other_session_id\", other.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revoke a session",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "description": "Log out another device (`other_session_id` is filled by **Sessions** with the first session that isn't this one).",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/sessions/{{other_session_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sessions",
+                "{{other_session_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "End this session; the tokens stop working.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "[\"access_token\", \"refresh_token\", \"session_id\", \"access_expires_at\", \"stream_token\", \"stream_expires_at\"]",
+                  "  .forEach((k) => pm.collectionVariables.unset(k));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Home",
+      "description": "",
+      "item": [
+        {
+          "name": "Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Everything for the app's home screen in one call: devices, heaters, appliances, recent events, cameras, electricity price.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/overview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "overview"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Recent activity: button presses, heater and washer events.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "events"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tapo devices",
+      "description": "Bulbs, plugs and the H100 hub with its buttons. **List devices** stores the first switchable device in `device_id`.",
+      "item": [
+        {
+          "name": "List devices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/devices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "devices"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const all = pm.response.json().flatMap((d) => [d, ...(d.children || [])]);",
+                  "const sw = all.find((d) => d.switchable);",
+                  "if (sw) pm.collectionVariables.set(\"device_id\", sw.id);",
+                  "const dim = all.find((d) => d.dimmable);",
+                  "if (dim) pm.collectionVariables.set(\"dimmable_id\", dim.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Turn on",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/devices/{{device_id}}/state",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "devices",
+                "{{device_id}}",
+                "state"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"on\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Turn off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Devices in CONFIRM_OFF (e.g. the fridge plug) should be confirmed in the app before calling this.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/devices/{{device_id}}/state",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "devices",
+                "{{device_id}}",
+                "state"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"on\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Toggle",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/devices/{{device_id}}/toggle",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "devices",
+                "{{device_id}}",
+                "toggle"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set brightness",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "1-100 (clamped to the bulb's range).",
+            "url": {
+              "raw": "{{base_url}}/api/v1/devices/{{dimmable_id}}/brightness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "devices",
+                "{{dimmable_id}}",
+                "brightness"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "All off",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Switches off every device that is on, except CONFIRM_OFF ones.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/scenes/all-off",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "scenes",
+                "all-off"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rediscover",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Scan the network for new devices.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/discover",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "discover"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Heater (Tuya)",
+      "description": "Immersion heater on a Tuya metering switch. **List heaters** stores the first one in `tuya_id`.",
+      "item": [
+        {
+          "name": "List heaters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Status, power, today/7-day kWh and cost, boost timer, faults.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tuya",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tuya"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const h = pm.response.json()[0];",
+                  "if (h) pm.collectionVariables.set(\"tuya_id\", h.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Turn on",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tuya/{{tuya_id}}/state",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tuya",
+                "{{tuya_id}}",
+                "state"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"on\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Turn off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tuya/{{tuya_id}}/state",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tuya",
+                "{{tuya_id}}",
+                "state"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"on\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Toggle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "`on: null` toggles.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tuya/{{tuya_id}}/state",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tuya",
+                "{{tuya_id}}",
+                "state"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"on\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Boost 60 min",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Turns on and uses the switch's own countdown, so it ends even if the server is down.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tuya/{{tuya_id}}/boost",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tuya",
+                "{{tuya_id}}",
+                "boost"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minutes\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel boost",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "`minutes: 0` cancels the countdown (the heater stays as it is).",
+            "url": {
+              "raw": "{{base_url}}/api/v1/tuya/{{tuya_id}}/boost",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tuya",
+                "{{tuya_id}}",
+                "boost"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minutes\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Appliances (SmartThings)",
+      "description": "Washer/dryer.",
+      "item": [
+        {
+          "name": "List appliances",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "State, phase, minutes left, plus the SmartThings login status in `auth`.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/appliances",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "appliances"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SmartThings login URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Only for the OAuth setup: open this URL, allow access, then send the address you land on to **Connect SmartThings**.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/smartthings/auth-url",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "smartthings",
+                "auth-url"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Connect SmartThings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/smartthings/connect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "smartthings",
+                "connect"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"https://httpbin.org/get?code=PASTE_CODE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Energy",
+      "description": "",
+      "item": [
+        {
+          "name": "Energy history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "kWh per device for the chart ranges `24h` (hourly), `7d`, `30d` (daily) and `12m` (monthly). `null` = no data for that bar. Cost = kWh × `price`.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/energy",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "energy"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cameras",
+      "description": "**List cameras** stores the first camera in `camera_id`. Snapshot, live and clip requests use `?token={{stream_token}}` like the app's `<img>`/`<video>` tags; the token is fetched automatically.",
+      "item": [
+        {
+          "name": "List cameras",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/cameras",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cameras"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json().cameras[0];",
+                  "if (c) pm.collectionVariables.set(\"camera_id\", c.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Snapshot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "JPEG.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/cameras/{{camera_id}}/snapshot?res=high&token={{stream_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cameras",
+                "{{camera_id}}",
+                "snapshot"
+              ],
+              "query": [
+                {
+                  "key": "res",
+                  "value": "high",
+                  "description": "low | high"
+                },
+                {
+                  "key": "token",
+                  "value": "{{stream_token}}",
+                  "description": "15-min stream token (fetched automatically)"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Live stream (MJPEG)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "multipart/x-mixed-replace stream: it never ends, so Postman keeps loading. Use it as `<img src>` in the app.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/cameras/{{camera_id}}/live?q=hd&token={{stream_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cameras",
+                "{{camera_id}}",
+                "live"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "hd",
+                  "description": "hd | sd"
+                },
+                {
+                  "key": "token",
+                  "value": "{{stream_token}}",
+                  "description": "15-min stream token (fetched automatically)"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recording hours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Hour folders, newest first. Stores the newest in `recording_dir`.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/cameras/{{camera_id}}/recordings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cameras",
+                "{{camera_id}}",
+                "recordings"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const h = (pm.response.json().hours || [])[0];",
+                  "if (h) pm.collectionVariables.set(\"recording_dir\", h.dir);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clips in an hour",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Stores the first clip in `recording_path`.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/cameras/{{camera_id}}/recordings?dir={{recording_dir}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cameras",
+                "{{camera_id}}",
+                "recordings"
+              ],
+              "query": [
+                {
+                  "key": "dir",
+                  "value": "{{recording_dir}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const c = (pm.response.json().clips || [])[0];",
+                  "if (c) pm.collectionVariables.set(\"recording_path\", c.path);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Clip file (MP4)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "Supports `Range` requests, so a video player can seek.",
+            "url": {
+              "raw": "{{base_url}}/api/v1/cameras/{{camera_id}}/recordings/file?path={{recording_path}}&token={{stream_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "cameras",
+                "{{camera_id}}",
+                "recordings",
+                "file"
+              ],
+              "query": [
+                {
+                  "key": "path",
+                  "value": "{{recording_path}}"
+                },
+                {
+                  "key": "token",
+                  "value": "{{stream_token}}",
+                  "description": "15-min stream token (fetched automatically)"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Debug",
+      "description": "",
+      "item": [
+        {
+          "name": "Button trigger logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/debug/buttons",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "debug",
+                "buttons"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Camera FTP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "description": "",
+            "url": {
+              "raw": "{{base_url}}/api/v1/debug/camera-ftp/{{camera_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "debug",
+                "camera-ftp",
+                "{{camera_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

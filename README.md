@@ -69,6 +69,8 @@ docker compose logs -f
 
 Same features as the web dashboard, for the iOS/Android app. Interactive docs: `http://<server>:8811/docs` (browser login).
 
+**Postman:** import `postman/home-dashboard.postman_collection.json` and `postman/home-dashboard.postman_environment.json`, set `password` in the environment, run **Auth > Login**. The collection sends the Bearer token, refreshes it before it expires, fetches stream tokens for camera URLs, and the *List* requests fill in device/heater/camera ids.
+
 **Auth** (same user as the web login, `DASHBOARD_USER` / `DASHBOARD_PASS`):
 
 | Call | What it does |
