@@ -32,6 +32,10 @@ BASE = Path(__file__).parent
 # config + state (.env, devices.json, tokens, energy history); a mounted volume in Docker
 DATA = Path(os.getenv("DATA_DIR") or BASE)
 load_dotenv(DATA / ".env")
+if not os.access(DATA, os.W_OK):
+    logging.getLogger("tapo.app").error(
+        "%s is not writable by uid %s: logins and energy history won't be saved (chown the data folder)",
+        DATA, os.getuid())
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("tapo.app")

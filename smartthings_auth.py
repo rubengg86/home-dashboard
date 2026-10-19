@@ -76,10 +76,11 @@ class OAuth:
         except FileNotFoundError:
             return {}
         except Exception as e:  # noqa: BLE001
-            log.error("Could not read %s: %s", self.store.name, e)
+            log.error("Could not read %s: %s (check the file's owner/permissions)", self.store, e)
             return {}
 
     def _save(self, resp: dict) -> None:
+        """Keeps the new tokens in memory and on disk; sets last_error (else clears it) if the disk write fails."""
         now = time.time()
         self.tokens = {
             "access_token": resp["access_token"],
@@ -90,9 +91,15 @@ class OAuth:
             "scope": resp.get("scope"),
         }
         tmp = self.store.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.tokens, indent=2))
-        os.chmod(tmp, 0o600)
-        tmp.replace(self.store)  # atomic: a crash never leaves a half-written token file
+        try:
+            tmp.write_text(json.dumps(self.tokens, indent=2))
+            os.chmod(tmp, 0o600)
+            tmp.replace(self.store)  # atomic: a crash never leaves a half-written token file
+            self.last_error = None
+        except OSError as e:
+            # keeps working until the next restart, then asks to log in again: make that visible
+            self.last_error = f"Login works but can't be saved ({e}); it will be lost on restart"
+            log.error("Could not save SmartThings tokens to %s: %s", self.store, e)
 
     # ---------------------------------------------------------- public
     def status(self) -> dict:
@@ -126,7 +133,6 @@ class OAuth:
                 "redirect_uri": self.redirect_uri, "client_id": self.client_id,
             })
             self._save(resp)
-        self.last_error = None
         log.info("SmartThings connected via OAuth (access token valid %d min)",
                  self.status()["access_expires_in_min"])
 
@@ -163,7 +169,6 @@ class OAuth:
                 self.last_error = str(e)
                 raise NeedsLogin(f"SmartThings login expired, connect again ({e})") from e
             self._save(resp)
-            self.last_error = None
             log.info("SmartThings access token refreshed")
 
     async def _token_request(self, data: dict) -> dict:

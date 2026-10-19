@@ -506,8 +506,9 @@ function renderAppliances(msg) {
     const auth = msg.auth || {};
     const needsLogin = auth.mode === "oauth" && !auth.connected;
     $("#stconnect").hidden = !needsLogin;
-    $("#apperr").hidden = !msg.error || needsLogin;
-    $("#apperr").textContent = msg.error ? `SmartThings: ${msg.error}` : "";
+    const err = msg.error || auth.error;  // auth.error: e.g. the login can't be saved to disk
+    $("#apperr").hidden = !err || needsLogin;
+    $("#apperr").textContent = err ? `SmartThings: ${err}` : "";
     $("#appauth").textContent = auth.mode === "pat" ? "SmartThings 24 h token" : "";
   }
   updateApplianceSection();
