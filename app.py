@@ -14,14 +14,17 @@ import re
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import parse_qs
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from auth import TokenStore, auth_router
 from cameras import CameraManager
 from devices import DeviceManager
 from smartthings import SmartThings
@@ -215,36 +218,69 @@ async def publish_event(ev: dict) -> None:
 app = FastAPI(title="Tapo Dashboard", lifespan=lifespan)
 
 
-class BasicAuth:
-    """HTTP Basic auth on everything (page, API, camera streams, WebSocket) when DASHBOARD_USER and
-    DASHBOARD_PASS are set. /healthz stays open for the Docker healthcheck."""
+class Auth:
+    """Login on everything when DASHBOARD_USER / DASHBOARD_PASS are set. Accepted:
+    - HTTP Basic (the web dashboard in a browser)
+    - Authorization: Bearer <access token> (the mobile app, /api/v1)
+    - ?token=<stream token> on camera streams/clips and the WebSocket, which can't send headers
+    Open: /healthz (Docker healthcheck), app login/refresh, CORS preflights."""
 
-    def __init__(self, app, user: str, password: str) -> None:
-        self.app = app
-        self.expected = base64.b64encode(f"{user}:{password}".encode()).decode()
+    OPEN = {"/healthz", "/api/v1/auth/login", "/api/v1/auth/refresh"}
+    STREAM = re.compile(r"^/api(/v1)?/(ws|cameras/[^/]+/(live|snapshot|recordings/file))$")
+
+    def __init__(self, app, user: str, password: str, tokens: TokenStore) -> None:
+        self.app, self.tokens = app, tokens
+        self.basic = base64.b64encode(f"{user}:{password}".encode()).decode()
+
+    def _allowed(self, scope) -> bool:
+        path = scope["path"]
+        if path in self.OPEN or scope.get("method") == "OPTIONS":
+            return True
+        header = dict(scope["headers"]).get(b"authorization", b"").decode("latin-1")
+        scheme, _, cred = header.partition(" ")
+        if scheme.lower() == "basic" and secrets.compare_digest(cred.strip(), self.basic):
+            return True
+        if scheme.lower() == "bearer" and self.tokens.verify(cred.strip()):
+            return True
+        if self.STREAM.match(path) or path == "/ws":
+            token = (parse_qs(scope.get("query_string", b"").decode()).get("token") or [""])[0]
+            return bool(token and self.tokens.verify(token, allow=("access", "stream")))
+        return False
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] not in ("http", "websocket") or scope["path"] == "/healthz":
-            return await self.app(scope, receive, send)
-        header = dict(scope["headers"]).get(b"authorization", b"").decode("latin-1")
-        scheme, _, token = header.partition(" ")
-        if scheme.lower() == "basic" and secrets.compare_digest(token.strip(), self.expected):
+        if scope["type"] not in ("http", "websocket") or self._allowed(scope):
             return await self.app(scope, receive, send)
         if scope["type"] == "websocket":
             return await send({"type": "websocket.close", "code": 1008})
-        await send({"type": "http.response.start", "status": 401,
-                    "headers": [(b"www-authenticate", b'Basic realm="Home dashboard", charset="UTF-8"'),
-                                (b"content-type", b"text/plain")]})
-        await send({"type": "http.response.body", "body": b"Login required"})
+        if scope["path"].startswith("/api/v1/"):  # the app: JSON, and no browser login popup
+            headers, body = [(b"www-authenticate", b"Bearer"), (b"content-type", b"application/json")], \
+                b'{"detail":"Not authenticated"}'
+        else:
+            headers, body = [(b"www-authenticate", b'Basic realm="Home dashboard", charset="UTF-8"'),
+                             (b"content-type", b"text/plain")], b"Login required"
+        await send({"type": "http.response.start", "status": 401, "headers": headers})
+        await send({"type": "http.response.body", "body": body})
 
 
+tokens: TokenStore | None = None
 if os.getenv("DASHBOARD_USER") and os.getenv("DASHBOARD_PASS"):
-    app.add_middleware(BasicAuth, user=os.environ["DASHBOARD_USER"], password=os.environ["DASHBOARD_PASS"])
+    tokens = TokenStore(os.environ["DASHBOARD_USER"], os.environ["DASHBOARD_PASS"], DATA)
+    app.add_middleware(Auth, user=os.environ["DASHBOARD_USER"], password=os.environ["DASHBOARD_PASS"], tokens=tokens)
 else:
     log.warning("DASHBOARD_USER / DASHBOARD_PASS not set: the dashboard is open to anyone on the network")
+# added last = outermost: answers the app's CORS preflights before auth runs
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in os.getenv(
+        "API_CORS_ORIGINS", "capacitor://localhost,ionic://localhost,http://localhost,https://localhost,"
+                            "http://localhost:8100").split(",") if o.strip()],
+    allow_methods=["*"], allow_headers=["Authorization", "Content-Type", "Range"],
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
+)
+api = APIRouter()  # mounted at /api (web dashboard) and /api/v1 (mobile app), see the bottom of this file
 
 
-@app.get("/healthz")
+@app.get("/healthz", include_in_schema=False)
 async def healthz():
     return {"ok": True}
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
@@ -268,22 +304,22 @@ def _wrap_errors(e: Exception):
     raise HTTPException(502, f"Device error: {e}")
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def index():
     return FileResponse(BASE / "static" / "index.html")
 
 
-@app.get("/api/devices")
+@api.get("/devices")
 async def list_devices():
     return manager.snapshot()
 
 
-@app.get("/api/events")
+@api.get("/events")
 async def list_events():
     return list(manager.events)
 
 
-@app.get("/api/appliances")
+@api.get("/appliances")
 async def list_appliances():
     return smartthings.snapshot() if smartthings else {"error": None, "appliances": []}
 
@@ -298,7 +334,7 @@ def _oauth() -> OAuth:
     return _st_auth
 
 
-@app.get("/api/smartthings/auth-url")
+@api.get("/smartthings/auth-url")
 async def smartthings_auth_url():
     a = _oauth()
     return {"url": a.authorize_url(), "redirect_uri": a.redirect_uri}
@@ -314,13 +350,13 @@ async def _connect(code: str) -> None:
     smartthings.poke()
 
 
-@app.post("/api/smartthings/connect")
+@api.post("/smartthings/connect")
 async def smartthings_connect(body: CodeBody):
     await _connect(body.code)
     return {"ok": True, **_oauth().status()}
 
 
-@app.get("/api/smartthings/callback")
+@api.get("/smartthings/callback")
 async def smartthings_callback(code: str):
     """Used only if SMARTTHINGS_REDIRECT_URI points at this dashboard."""
     await _connect(code)
@@ -337,12 +373,12 @@ def _tuya() -> TuyaManager:
     return tuya
 
 
-@app.get("/api/tuya")
+@api.get("/tuya")
 async def tuya_list():
     return _tuya().snapshot() if tuya else []
 
 
-@app.post("/api/tuya/{dev_id}/state")
+@api.post("/tuya/{dev_id}/state")
 async def tuya_state(dev_id: str, body: OnBody):
     try:
         await _tuya().set_on(dev_id, body.on)
@@ -351,7 +387,7 @@ async def tuya_state(dev_id: str, body: OnBody):
     return {"ok": True}
 
 
-@app.post("/api/tuya/{dev_id}/boost")
+@api.post("/tuya/{dev_id}/boost")
 async def tuya_boost(dev_id: str, body: BoostBody):
     try:
         await _tuya().boost(dev_id, body.minutes)
@@ -360,12 +396,12 @@ async def tuya_boost(dev_id: str, body: BoostBody):
     return {"ok": True}
 
 
-@app.get("/api/debug/buttons")
+@api.get("/debug/buttons")
 async def debug_buttons():
     return await manager.debug_buttons()
 
 
-@app.post("/api/devices/{device_id}/toggle")
+@api.post("/devices/{device_id}/toggle")
 async def toggle(device_id: str):
     try:
         await manager.set_on(device_id, None)
@@ -374,7 +410,7 @@ async def toggle(device_id: str):
     return {"ok": True}
 
 
-@app.post("/api/devices/{device_id}/state")
+@api.post("/devices/{device_id}/state")
 async def set_state(device_id: str, body: OnBody):
     try:
         await manager.set_on(device_id, body.on)
@@ -383,7 +419,7 @@ async def set_state(device_id: str, body: OnBody):
     return {"ok": True}
 
 
-@app.post("/api/devices/{device_id}/brightness")
+@api.post("/devices/{device_id}/brightness")
 async def brightness(device_id: str, body: BrightnessBody):
     try:
         await manager.set_brightness(device_id, body.value)
@@ -392,7 +428,7 @@ async def brightness(device_id: str, body: BrightnessBody):
     return {"ok": True}
 
 
-@app.post("/api/scenes/all-off")
+@api.post("/scenes/all-off")
 async def all_off():
     return {"ok": True, "switched_off": await manager.all_off()}
 
@@ -410,7 +446,7 @@ def _buckets(rng: str) -> list[tuple[str, str]]:
     return [(f"{y}-{m:02d}", f"{y}-{m:02d}-01") for y, m in months]
 
 
-@app.get("/api/energy")
+@api.get("/energy")
 async def energy():
     """kWh per device for each chart range. null = no data for that bar (before a device's history starts)."""
     series = await manager.energy_history() + (tuya.energy_history() if tuya else [])
@@ -432,13 +468,13 @@ async def energy():
     }
 
 
-@app.get("/api/cameras")
+@api.get("/cameras")
 async def list_cameras():
     return {"refresh_seconds": float(os.getenv("SNAPSHOT_SECONDS", "2")),
             "live": cameras.live_available, "cameras": cameras.list()}
 
 
-@app.get("/api/cameras/{cam_id}/live")
+@api.get("/cameras/{cam_id}/live")
 async def camera_live(cam_id: str, request: Request, q: str = "hd"):
     """MJPEG stream (multipart/x-mixed-replace): works as a plain <img src>."""
     try:
@@ -466,7 +502,7 @@ async def camera_live(cam_id: str, request: Request, q: str = "hd"):
                              headers={"Cache-Control": "no-store"})
 
 
-@app.get("/api/cameras/{cam_id}/snapshot")
+@api.get("/cameras/{cam_id}/snapshot")
 async def camera_snapshot(cam_id: str, res: str = "low"):
     try:
         data = await cameras.snapshot(cam_id, res)
@@ -499,7 +535,7 @@ async def _ftp(fn, *args):
         raise HTTPException(502, f"Camera FTP: {e}")
 
 
-@app.get("/api/cameras/{cam_id}/recordings")
+@api.get("/cameras/{cam_id}/recordings")
 async def recordings_list(cam_id: str, dir: str | None = None):
     """No dir: hour folders (newest first). With dir: the clips in that folder."""
     rec = _recs(cam_id)
@@ -508,7 +544,7 @@ async def recordings_list(cam_id: str, dir: str | None = None):
     return {"hours": await _ftp(rec.list_hours)}
 
 
-@app.get("/api/cameras/{cam_id}/recordings/file")
+@api.get("/cameras/{cam_id}/recordings/file")
 async def recordings_file(cam_id: str, path: str, request: Request):
     """Stream a clip with HTTP Range support so the video player can seek."""
     rec = _recs(cam_id)
@@ -533,18 +569,19 @@ async def recordings_file(cam_id: str, path: str, request: Request):
     return StreamingResponse(rec.stream(path, 0, total), media_type=media, headers=headers)
 
 
-@app.get("/api/debug/camera-ftp/{cam_id}")
+@api.get("/debug/camera-ftp/{cam_id}")
 async def camera_ftp_debug(cam_id: str):
     return await _ftp(_recs(cam_id).debug)
 
 
-@app.post("/api/discover")
+@api.post("/discover")
 async def rediscover():
     await manager.discover()
     return {"ok": True, "devices": len(manager.tracked)}
 
 
 @app.websocket("/ws")
+@app.websocket("/api/v1/ws")  # app: ?token=<stream token>; same messages as the web dashboard
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     clients.add(ws)
@@ -562,6 +599,27 @@ async def ws_endpoint(ws: WebSocket):
     finally:
         clients.discard(ws)
 
+
+# ---------------------------------------------------------------- mobile app API (/api/v1)
+app_api = APIRouter()
+
+
+@app_api.get("/overview", summary="Everything for the app's home screen in one call")
+async def overview():
+    return {
+        "devices": manager.snapshot(),
+        "heaters": tuya.snapshot() if tuya else [],
+        "appliances": smartthings.snapshot() if smartthings else {"error": None, "appliances": []},
+        "events": list(manager.events)[:20],
+        "cameras": await list_cameras(),
+        "price_per_kwh": float(os.getenv("ELECTRICITY_PRICE", "0")), "currency": os.getenv("CURRENCY", "€"),
+    }
+
+
+app.include_router(api, prefix="/api", include_in_schema=False)
+app.include_router(auth_router(tokens), prefix="/api/v1")
+app.include_router(app_api, prefix="/api/v1", tags=["app"])
+app.include_router(api, prefix="/api/v1", tags=["dashboard"])
 
 if __name__ == "__main__":
     uvicorn.run(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "8000")))

@@ -65,6 +65,25 @@ docker compose logs -f
 | GET | `/api/cameras/{id}/snapshot?res=low\|high` | – (JPEG) |
 | WS | `/ws` | pushes `devices`, `events`, `event` messages |
 
+## Mobile app API (`/api/v1`)
+
+Same features as the web dashboard, for the iOS/Android app. Interactive docs: `http://<server>:8811/docs` (browser login).
+
+**Auth** (same user as the web login, `DASHBOARD_USER` / `DASHBOARD_PASS`):
+
+| Call | What it does |
+|---|---|
+| `POST /api/v1/auth/login` `{username, password, device_name}` | → `access_token` (1 h), `refresh_token` (90 days), `session_id` |
+| `POST /api/v1/auth/refresh` `{refresh_token}` | → new access + refresh token. Refresh tokens are single use: store the new one. Re-using an old one revokes the session |
+| `GET /api/v1/auth/stream-token` | → 15-min read-only token for URLs that can't send headers |
+| `GET /api/v1/auth/me`, `GET /api/v1/auth/sessions`, `DELETE /api/v1/auth/sessions/{id}`, `POST /api/v1/auth/logout` | session info / log out this or another phone |
+
+Every other call sends `Authorization: Bearer <access_token>`. On a 401, refresh once and retry; if refresh fails, show the login screen. Camera images, the MJPEG live stream, recording clips and the WebSocket take `?token=<stream token>` instead (`<img src>`, `<video src>` and WebSockets can't set headers). Changing `DASHBOARD_PASS` logs out every app. 5 wrong passwords in 5 minutes from one IP block logins for a while (429).
+
+**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event` messages). All under `/api/v1`.
+
+CORS allows the Capacitor/Ionic origins (`capacitor://localhost`, `http://localhost`, `http://localhost:8100` for `ionic serve`); change with `API_CORS_ORIGINS`. Tokens are signed with a key generated in `data/.api_secret` (or `API_SECRET`).
+
 ## Troubleshooting
 
 - **No devices**: broadcast discovery doesn't cross VLANs or Docker bridge networks. Set `TAPO_HOSTS=192.168.1.20,...` (include the H100) and give the devices DHCP reservations.
