@@ -9,3 +9,4 @@ data
 *.json
 !actions.example.json
 *.tmp
+app

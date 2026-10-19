@@ -1,0 +1,9 @@
+ion-title { font-size: 22px; font-weight: 700; }
+.empty { padding: 24px 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 0; }
+.tile { margin: 0; display: flex; flex-direction: column; gap: 6px;
+  .ico { margin-bottom: 6px; } .name { margin-top: 4px; } }
+.grid + .card, .grid + .section-title { margin-top: 12px; }
+ion-toggle { --track-background-checked: var(--app-on); }
+ion-range { --bar-background-active: var(--app-on); --knob-size: 22px; padding: 0; margin-top: -4px; }
+.lock { font-size: 14px; color: var(--app-muted); vertical-align: -2px; margin-left: 4px; }

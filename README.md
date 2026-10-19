@@ -65,6 +65,10 @@ docker compose logs -f
 | GET | `/api/cameras/{id}/snapshot?res=low\|high` | – (JPEG) |
 | WS | `/ws` | pushes `devices`, `events`, `event` messages |
 
+## Mobile app
+
+Ionic Angular + Capacitor app in [`app/`](app/README.md) (iOS + Android): login, Home, Energy and Devices tabs, on top of the API below.
+
 ## Mobile app API (`/api/v1`)
 
 Same features as the web dashboard, for the iOS/Android app. Interactive docs: `http://<server>:8811/docs` (browser login).

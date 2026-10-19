@@ -1,0 +1,77 @@
+/*
+ * App Global CSS
+ * ----------------------------------------------------------------------------
+ * Put style rules here that you want to apply globally. These styles are for
+ * the entire app and not just one component. Additionally, this file can be
+ * used as an entry point to import other CSS/Sass files to be included in the
+ * output CSS.
+ * For more information on global stylesheets, visit the documentation:
+ * https://ionicframework.com/docs/layout/global-stylesheets
+ */
+
+/* Core CSS required for Ionic components to work properly */
+@import "@ionic/angular/css/core.css";
+
+/* Basic CSS for apps built with Ionic */
+@import "@ionic/angular/css/normalize.css";
+@import "@ionic/angular/css/structure.css";
+@import "@ionic/angular/css/typography.css";
+@import "@ionic/angular/css/display.css";
+
+/* Optional CSS utils that can be commented out */
+@import "@ionic/angular/css/padding.css";
+@import "@ionic/angular/css/float-elements.css";
+@import "@ionic/angular/css/text-alignment.css";
+@import "@ionic/angular/css/text-transformation.css";
+@import "@ionic/angular/css/flex-utils.css";
+
+/**
+ * Ionic Dark Mode
+ * -----------------------------------------------------
+ * For more info, please see:
+ * https://ionicframework.com/docs/theming/dark-mode
+ */
+
+/* @import "@ionic/angular/css/palettes/dark.always.css"; */
+/* @import "@ionic/angular/css/palettes/dark.class.css"; */
+@import '@ionic/angular/css/palettes/dark.system.css';
+
+/* ---------- app */
+ion-content { --background: var(--app-bg); }
+ion-tab-bar { border-top: 1px solid var(--app-line); }
+
+.section-title {
+  font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--app-muted); margin: 22px 4px 10px; display: flex; align-items: baseline; gap: 8px;
+  span { text-transform: none; letter-spacing: 0; font-weight: 500; }
+}
+.card {
+  background: var(--app-card); border: 1px solid var(--app-line); border-radius: var(--app-radius);
+  padding: 16px; margin-bottom: 12px;
+  &.on { background: var(--app-on-soft); border-color: var(--app-on); }
+  &.offline { opacity: .55; }
+}
+.ico {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none;
+  background: var(--app-card-2); color: var(--app-muted); font-size: 20px;
+  .on & { background: var(--app-on); color: var(--app-on-ink); }
+}
+.row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.grow { flex: 1; min-width: 0; }
+.name { font-weight: 650; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: 13px; color: var(--app-muted); }
+.big { font-size: 30px; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip {
+  font-size: 12.5px; background: var(--app-card-2); border-radius: 8px; padding: 4px 9px; color: var(--app-muted);
+  b { color: var(--ion-text-color); font-weight: 600; }
+  &.bad, &.bad b { color: var(--app-bad); }
+}
+.pill {
+  font-size: 12px; font-weight: 650; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  background: var(--app-card-2); color: var(--app-muted);
+  &.active { background: var(--app-on); color: var(--app-on-ink); }
+  &.ok { background: var(--app-ok); color: #fff; }
+}
+.err { font-size: 13px; color: var(--app-bad); margin-top: 8px; }
+.tnum { font-variant-numeric: tabular-nums; }

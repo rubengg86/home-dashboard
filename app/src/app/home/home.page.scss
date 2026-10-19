@@ -1,0 +1,26 @@
+ion-title { font-size: 22px; font-weight: 700; padding-top: 6px; }
+.status { font-size: 12.5px; font-weight: 500; color: var(--app-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--app-bad); &.live { background: var(--app-ok); } }
+
+.hero-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.hero .big { font-size: 40px; }
+.right { text-align: right; }
+.mid { font-size: 20px; font-weight: 700; }
+.hero-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px;
+  ion-button { margin: 0; --border-radius: 999px; } }
+
+.heater-w { margin-top: 12px; }
+.boosts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
+  ion-button { margin: 0; --border-radius: 999px; } }
+ion-toggle { --track-background-checked: var(--app-on); }
+
+.bar { height: 6px; border-radius: 999px; background: var(--app-card-2); overflow: hidden; margin-top: 12px;
+  i { display: block; height: 100%; background: var(--app-on); border-radius: 999px; transition: width .4s; } }
+
+.cam { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; margin-bottom: 12px; }
+.cam-label { position: absolute; left: 10px; bottom: 10px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12.5px;
+  padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+
+.list { padding: 4px 16px; }
+.ev { display: flex; gap: 10px; align-items: baseline; padding: 10px 0; font-size: 14px;
+  & + & { border-top: 1px solid var(--app-line); } }

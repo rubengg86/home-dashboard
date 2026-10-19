@@ -1,0 +1,50 @@
+// Same palette as the web dashboard. Ionic's own dark palette (dark.system.css) follows the phone setting.
+:root {
+  --ion-color-primary: #2f62d8;
+  --ion-color-primary-rgb: 47, 98, 216;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-shade: #2956be;
+  --ion-color-primary-tint: #4472dc;
+
+  --app-bg: #f3f2ee;
+  --app-card: #ffffff;
+  --app-card-2: #f8f7f4;
+  --app-line: #e3e1db;
+  --app-muted: #75736d;
+  --app-on: #f0a412;        // "on" state (lights, plugs, heater)
+  --app-on-ink: #1c1c1a;
+  --app-on-soft: #fdf0d5;
+  --app-ok: #2c9a5d;
+  --app-bad: #d1453a;
+  --app-radius: 18px;
+
+  // chart series: categorical slots in fixed order, validated for CVD + contrast (same as the web chart)
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+
+  --ion-background-color: var(--app-bg);
+  --ion-toolbar-background: var(--app-bg);
+  --ion-tab-bar-background: var(--app-card);
+  --ion-tab-bar-color-selected: var(--ion-text-color, #1c1c1a);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-bg: #121211;
+    --app-card: #1c1c1a;
+    --app-card-2: #232321;
+    --app-line: #2c2c29;
+    --app-muted: #95938c;
+    --app-on-soft: #382b0f;
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
+    --ion-background-color: var(--app-bg);
+    --ion-toolbar-background: var(--app-bg);
+    --ion-tab-bar-background: var(--app-card);
+    --ion-item-background: var(--app-card);
+  }
+}

@@ -1,0 +1,128 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-title>
+      {{ greeting() }}
+      <div class="status">
+        <span class="dot" [class.live]="live.connected()"></span>
+        {{ live.connected() ? 'Live' : 'Connecting…' }}
+      </div>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="account()" aria-label="Account"><ion-icon slot="icon-only" name="person-circle-outline"></ion-icon></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
+
+  @if (live.error() && !live.loaded()) {
+    <div class="card"><div class="err">{{ live.error() }}</div></div>
+  }
+
+  <!-- power right now + today -->
+  <div class="card hero">
+    <div class="hero-row">
+      <div>
+        <div class="meta">Using now</div>
+        <div class="big">{{ fmtW(live.powerNow()) }}</div>
+      </div>
+      <div class="right">
+        <div class="meta">Today</div>
+        <div class="mid tnum">{{ today() ? fmtKWh(today()!.kwh) : '–' }}</div>
+        @if (today()?.cost != null) { <div class="meta tnum">{{ fmtMoney(today()!.cost, live.currency()) }}</div> }
+      </div>
+    </div>
+    <div class="hero-foot">
+      <span class="meta">{{ onCount() }} device{{ onCount() === 1 ? '' : 's' }} on</span>
+      <ion-button size="small" fill="outline" color="medium" (click)="allOff()">
+        <ion-icon slot="start" name="power-outline"></ion-icon> All off
+      </ion-button>
+    </div>
+  </div>
+
+  <!-- heater -->
+  @for (h of live.heaters(); track h.id) {
+    <div class="card" [class.on]="h.on && h.online" [class.offline]="!h.online">
+      <div class="row">
+        <span class="ico"><ion-icon [name]="h.status === 'Hot' ? 'water-outline' : 'flame'"></ion-icon></span>
+        <div class="grow">
+          <div class="name">{{ h.name }}</div>
+          <div class="meta">
+            @if (boostLeft(h) != null) { Boost · {{ boostLeft(h) }} min left · ends {{ hhmm(h.boost_ends_at!) }} }
+            @else if (h.on && h.on_since) { On since {{ hhmm(h.on_since) }} }
+            @else { Immersion heater }
+          </div>
+        </div>
+        <span class="pill" [class.active]="h.status === 'Heating'" [class.ok]="h.status === 'Hot'">{{ heaterLabel(h) }}</span>
+        <ion-toggle [checked]="h.on" [disabled]="!h.online" (ionChange)="toggleHeater(h, $event.detail.checked)"
+                    [attr.aria-label]="'Heater ' + h.name"></ion-toggle>
+      </div>
+      @if (h.on && h.online) { <div class="big heater-w">{{ fmtW(h.power_w) }}</div> }
+      @if (h.has_boost) {
+        <div class="boosts">
+          @for (m of [30, 60, 90]; track m) {
+            <ion-button size="small" fill="outline" [disabled]="!h.online" (click)="boost(h, m)">{{ m }} min</ion-button>
+          }
+          @if (boostLeft(h) != null) {
+            <ion-button size="small" fill="clear" color="medium" (click)="boost(h, 0)">Cancel</ion-button>
+          }
+        </div>
+      }
+      <div class="chips">
+        <span class="chip">Today <b>{{ fmtKWh(h.kwh_today) }}{{ h.cost_today != null ? ' · ' + fmtMoney(h.cost_today, h.currency) : '' }}</b></span>
+        <span class="chip">7 days <b>{{ fmtKWh(h.kwh_7d) }}{{ h.cost_7d != null ? ' · ' + fmtMoney(h.cost_7d, h.currency) : '' }}</b></span>
+        @for (f of h.faults; track f) { <span class="chip bad">Fault <b>{{ f }}</b></span> }
+      </div>
+      @if (h.error && !h.online) { <div class="err">{{ h.error }}</div> }
+    </div>
+  }
+
+  <!-- washer / dryer -->
+  @if (live.appliances().appliances.length) {
+    <div class="section-title">Laundry</div>
+    @for (a of live.appliances().appliances; track a.id) {
+      <div class="card" [class.on]="a.status === 'Running'">
+        <div class="row">
+          <span class="ico"><ion-icon name="shirt-outline"></ion-icon></span>
+          <div class="grow">
+            <div class="name">{{ a.name }}</div>
+            <div class="meta">
+              {{ a.phase || (a.status === 'Off' ? 'Off' : 'Idle') }}
+              @if (a.status === 'Running' && a.ends_at) { · ends {{ hhmm(a.ends_at) }} }
+            </div>
+          </div>
+          <span class="pill" [class.active]="a.status === 'Running'">
+            @if (a.status === 'Running' && minutesUntil(a.ends_at) != null) { {{ minutesUntil(a.ends_at) }} min } @else { {{ a.status }} }
+          </span>
+        </div>
+        @if (a.progress != null) { <div class="bar"><i [style.width.%]="a.progress"></i></div> }
+      </div>
+    }
+  }
+  @if (live.appliances().error) { <div class="err">SmartThings: {{ live.appliances().error }}</div> }
+
+  <!-- cameras -->
+  @if (live.cameras().cameras.length) {
+    <div class="section-title">Cameras</div>
+    @for (c of live.cameras().cameras; track c.id) {
+      <button class="cam" type="button" (click)="openCamera(c)" [attr.aria-label]="'Open live video, ' + c.name">
+        <app-camera-snapshot [camId]="c.id" [name]="c.name"></app-camera-snapshot>
+        <span class="cam-label"><ion-icon name="videocam-outline"></ion-icon> {{ c.name }}</span>
+      </button>
+    }
+  }
+
+  <!-- activity -->
+  @if (live.events().length) {
+    <div class="section-title">Activity</div>
+    <div class="card list">
+      @for (e of live.events().slice(0, 6); track e.received + e.device_id + e.event) {
+        <div class="ev">
+          <span class="grow"><b>{{ e.alias }}</b> · {{ eventLabel(e.event) }}</span>
+          <span class="meta">{{ timeAgo(e.received || e.timestamp) }}</span>
+        </div>
+      }
+    </div>
+  }
+</ion-content>

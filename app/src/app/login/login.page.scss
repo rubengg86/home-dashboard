@@ -1,0 +1,24 @@
+.wrap {
+  max-width: 380px;
+  margin: 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px 0 48px;
+}
+.brand { text-align: center; margin-bottom: 32px; }
+.logo {
+  width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 16px;
+  display: grid; place-items: center; font-size: 32px;
+  background: var(--app-on); color: var(--app-on-ink);
+}
+h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.brand p { margin: 6px 0 0; color: var(--ion-color-medium); }
+form { display: flex; flex-direction: column; gap: 14px; }
+ion-button { margin-top: 8px; --border-radius: 14px; height: 50px; font-weight: 600; }
+.error { margin: 0; font-size: 14px; }
+.server {
+  margin: 24px auto 0; background: none; border: 0; color: var(--ion-color-medium);
+  font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; padding: 8px;
+}

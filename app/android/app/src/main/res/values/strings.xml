@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Home</string>
+    <string name="title_activity_main">Home</string>
+    <string name="package_name">com.rubengg86.homedashboard</string>
+    <string name="custom_url_scheme">com.rubengg86.homedashboard</string>
+</resources>

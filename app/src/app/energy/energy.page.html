@@ -1,0 +1,81 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-title>Energy</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
+
+  <ion-segment [value]="range()" (ionChange)="range.set($any($event.detail.value))">
+    <ion-segment-button value="24h"><ion-label>24 h</ion-label></ion-segment-button>
+    <ion-segment-button value="7d"><ion-label>7 d</ion-label></ion-segment-button>
+    <ion-segment-button value="30d"><ion-label>30 d</ion-label></ion-segment-button>
+    <ion-segment-button value="12m"><ion-label>12 mo</ion-label></ion-segment-button>
+  </ion-segment>
+
+  @if (!data()) {
+    <div class="meta empty">Loading energy history…</div>
+  } @else {
+    <div class="stats">
+      <div class="card stat"><div class="v">{{ stats()?.kwh }}</div><div class="meta">Total</div></div>
+      <div class="card stat"><div class="v">{{ stats()?.cost }}</div><div class="meta">Cost</div></div>
+      <div class="card stat"><div class="v">{{ stats()?.avg }}</div><div class="meta">{{ stats()?.avgLabel }}</div></div>
+      <div class="card stat"><div class="v">{{ fmtW(live.powerNow()) }}</div><div class="meta">Now</div></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <span class="meta">{{ priced() ? data()!.currency + data()!.price.toFixed(2) + ' / kWh' : '' }}</span>
+        @if (priced()) {
+          <ion-segment class="unit" [value]="unit()" (ionChange)="unit.set($any($event.detail.value))">
+            <ion-segment-button value="kwh"><ion-label>kWh</ion-label></ion-segment-button>
+            <ion-segment-button value="cost"><ion-label>{{ data()!.currency }}</ion-label></ion-segment-button>
+          </ion-segment>
+        }
+      </div>
+      <app-energy-chart [series]="series()" [buckets]="buckets()" [range]="range()" [fmt]="fmt()"
+                        [scale]="scale()" [unitLabel]="cost() ? data()!.currency : 'kWh'"></app-energy-chart>
+      <div class="legend">
+        @for (s of series(); track s.id) { <span><i [style.background]="s.color"></i>{{ s.name }}</span> }
+      </div>
+    </div>
+
+    <div class="section-title">By device</div>
+    <div class="card">
+      @for (b of breakdown(); track b.id) {
+        <div class="dev">
+          <div class="row">
+            <i class="sw" [style.background]="b.color"></i>
+            <span class="grow name-s">{{ b.name }}</span>
+            <b class="tnum">{{ b.value }}</b>
+            <span class="meta share tnum">{{ b.share.toFixed(0) }}%</span>
+          </div>
+          <div class="share-bar"><i [style.width.%]="b.share" [style.background]="b.color"></i></div>
+          @if (b.kind === 'heater' && b.since && range() !== '24h') {
+            <div class="meta note">History since {{ b.since }}</div>
+          }
+        </div>
+      }
+    </div>
+
+    <button class="table-toggle" type="button" (click)="showTable.set(!showTable())" [attr.aria-expanded]="showTable()">
+      {{ showTable() ? 'Hide' : 'Show' }} every {{ range() === '24h' ? 'hour' : range() === '12m' ? 'month' : 'day' }}
+    </button>
+    @if (showTable()) {
+      <div class="card table">
+        @for (r of table(); track r.label) {
+          <div class="trow">
+            <div class="row"><span class="grow">{{ r.label }}</span><b class="tnum">{{ r.kwh }}</b>
+              @if (r.cost) { <span class="meta tnum cost">{{ r.cost }}</span> }</div>
+            @if (series().length > 1) {
+              <div class="meta parts">
+                @for (s of series(); track s.id; let i = $index) { <span><i [style.background]="s.color"></i>{{ r.vals[i] }}</span> }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+</ion-content>

@@ -1,0 +1,95 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-title>Devices</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="rediscover()" aria-label="Search for new devices"><ion-icon slot="icon-only" name="refresh-outline"></ion-icon></ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
+
+  @if (!live.loaded()) { <div class="meta empty">Loading devices…</div> }
+
+  <!-- lights -->
+  @if (live.lights().length) {
+    <div class="section-title">Lights <span>{{ lightsOn() }} of {{ live.lights().length }} on</span></div>
+    <div class="grid">
+      @for (d of live.lights(); track d.id) {
+        <div class="card tile" [class.on]="d.on" [class.offline]="!d.online">
+          <div class="row">
+            <span class="ico"><ion-icon [name]="d.on ? 'bulb' : 'bulb-outline'"></ion-icon></span>
+            <span class="grow"></span>
+            <ion-toggle [checked]="!!d.on" [disabled]="!d.online" (ionChange)="toggle(d, $event)" [attr.aria-label]="d.alias"></ion-toggle>
+          </div>
+          <div class="name">{{ d.alias }}</div>
+          <div class="meta">{{ !d.online ? 'Offline' : d.on ? (d.dimmable ? 'On · ' + d.brightness + '%' : 'On') : 'Off' }}</div>
+          @if (d.dimmable) {
+            <ion-range [min]="1" [max]="100" [value]="d.brightness ?? 50" [disabled]="!d.online" (ionChange)="bright(d, $event)"
+                       [attr.aria-label]="'Brightness ' + d.alias"></ion-range>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- plugs -->
+  @if (live.plugs().length) {
+    <div class="section-title">Plugs <span>{{ plugsOn() }} of {{ live.plugs().length }} on</span></div>
+    @for (d of live.plugs(); track d.id) {
+      <div class="card" [class.on]="d.on" [class.offline]="!d.online">
+        <div class="row">
+          <span class="ico"><ion-icon name="radio-button-on-outline"></ion-icon></span>
+          <div class="grow">
+            <div class="name">{{ d.alias }}
+              @if (d.confirm_off) { <ion-icon class="lock" name="lock-closed-outline" aria-label="Protected"></ion-icon> }
+            </div>
+            <div class="meta">{{ d.model }} · {{ !d.online ? 'Offline' : d.on ? 'On' : 'Off' }}</div>
+          </div>
+          <ion-toggle [checked]="!!d.on" [disabled]="!d.online" (ionChange)="toggle(d, $event)" [attr.aria-label]="d.alias"></ion-toggle>
+        </div>
+        @if (power(d) != null || today(d) != null) {
+          <div class="chips">
+            @if (power(d) != null) { <span class="chip">Now <b>{{ fmtW(power(d)) }}</b></span> }
+            @if (today(d) != null) { <span class="chip">Today <b>{{ fmtKWh(today(d)) }}</b></span> }
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- heater -->
+  @if (live.heaters().length) {
+    <div class="section-title">Heater</div>
+    @for (h of live.heaters(); track h.id) {
+      <div class="card" [class.on]="h.on && h.online" [class.offline]="!h.online">
+        <div class="row">
+          <span class="ico"><ion-icon name="flame"></ion-icon></span>
+          <div class="grow">
+            <div class="name">{{ h.name }}</div>
+            <div class="meta">{{ h.status === 'Hot' ? 'Hot water ready' : h.status }}{{ h.on && h.online ? ' · ' + fmtW(h.power_w) : '' }}</div>
+          </div>
+          <ion-toggle [checked]="h.on" [disabled]="!h.online" (ionChange)="heater(h, $event)" [attr.aria-label]="h.name"></ion-toggle>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- hubs and their buttons -->
+  @for (hub of live.hubs(); track hub.id) {
+    <div class="section-title">{{ hub.alias }} <span>{{ hub.children!.length }} paired · {{ hub.online ? 'online' : 'offline' }}</span></div>
+    <div class="grid">
+      @for (c of hub.children; track c.id) {
+        <div class="card tile" [class.offline]="!hub.online">
+          <span class="ico"><ion-icon name="ellipse-outline"></ion-icon></span>
+          <div class="name">{{ c.alias }}</div>
+          <div class="meta">
+            @if (lastEvent().get(c.id); as e) { {{ eventLabel(e.event) }} · {{ timeAgo(e.received || e.timestamp) }} }
+            @else { {{ c.model }} }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</ion-content>
