@@ -98,6 +98,8 @@ if _tuya_file.exists():
         )
     except Exception as e:  # noqa: BLE001
         log.error("Tuya disabled, could not load %s: %s", _tuya_file.name, e)
+else:
+    log.info("Tuya disabled: %s not found (create it with: python -m tinytuya wizard)", _tuya_file)
 
 # ---------------------------------------------------------------- automations
 # actions.json maps source alias -> event name -> action, e.g.
