@@ -1,4 +1,6 @@
-python-kasa>=0.12,<0.13
+# Pinned to the TPAP PR branch (python-kasa#1592): bulbs on firmware 1.4.0 speak TPAP,
+# which no released python-kasa supports yet. Revert to a normal pin once it's released.
+python-kasa @ https://github.com/ZeliardM/python-kasa/archive/7b28dd94fc458bddf110ec58995ee31faa4c1080.tar.gz
 fastapi>=0.110
 uvicorn[standard]>=0.29
 python-dotenv>=1.0
