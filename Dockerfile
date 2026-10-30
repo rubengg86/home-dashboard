@@ -1,5 +1,6 @@
-# Build the mobile app as a PWA served by the backend at /app
-FROM node:22-slim AS pwa
+# Build the mobile app as a PWA served by the backend at /app.
+# node 24 ships npm 11, which wrote package-lock.json; npm 10 (node 22) rejects it.
+FROM node:24-slim AS pwa
 WORKDIR /build
 COPY app/package.json app/package-lock.json ./
 RUN npm ci
