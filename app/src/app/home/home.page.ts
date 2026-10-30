@@ -13,6 +13,7 @@ import { Camera, Heater } from '../core/models';
 import { CameraLiveComponent } from '../shared/camera-live.component';
 import { CameraSnapshotComponent } from '../shared/camera-snapshot.component';
 import { UiService } from '../shared/ui.service';
+import { BUILD } from '../../environments/version';
 
 @Component({
   selector: 'app-home',
@@ -22,6 +23,7 @@ import { UiService } from '../shared/ui.service';
             IonRefresherContent, IonToggle, CameraSnapshotComponent],
 })
 export class HomePage {
+  readonly build = BUILD;
   live = inject(LiveService);
   private auth = inject(AuthService);
   private ui = inject(UiService);

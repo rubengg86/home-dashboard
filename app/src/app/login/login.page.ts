@@ -5,6 +5,7 @@ import { IonButton, IonContent, IonIcon, IonInput, IonInputPasswordToggle, IonSp
 import { addIcons } from 'ionicons';
 import { flash, serverOutline } from 'ionicons/icons';
 import { AuthService } from '../core/auth.service';
+import { BUILD } from '../../environments/version';
 
 @Component({
   selector: 'app-login',
@@ -16,6 +17,7 @@ export class LoginPage implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
 
+  readonly build = BUILD;
   server = '';
   username = '';
   password = '';

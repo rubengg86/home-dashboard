@@ -5,7 +5,10 @@ WORKDIR /build
 COPY app/package.json app/package-lock.json ./
 RUN npm ci
 COPY app/ .
-RUN npx ng build --configuration production --base-href /app/
+# Stamp the build (shown on the login and home screens). The layer is cached together with
+# the build, so the stamp only changes when the app's code changes.
+RUN printf "export const BUILD = 'v%s';\n" "$(date -u +'%Y-%m-%d %H:%M') UTC" > src/environments/version.ts \
+    && npx ng build --configuration production --base-href /app/
 
 FROM python:3.12-slim
 
