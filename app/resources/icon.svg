@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#0f172a"/>
+  <g>
+    <!-- ears -->
+    <polygon points="275,420 325,135 505,315" fill="#b98a68"/>
+    <polygon points="749,420 699,135 519,315" fill="#b98a68"/>
+    <polygon points="318,370 350,205 455,310" fill="#8c7d74"/>
+    <polygon points="706,370 674,205 569,310" fill="#8c7d74"/>
+    <!-- ear tufts -->
+    <polygon points="340,345 352,245 376,330 394,268 410,322" fill="#f5efe8"/>
+    <polygon points="684,345 672,245 648,330 630,268 614,322" fill="#f5efe8"/>
+
+    <!-- fluffy cheek fur -->
+    <polygon points="232,560 160,600 240,626 150,680 250,690 190,760 280,740" fill="#b98a68"/>
+    <polygon points="792,560 864,600 784,626 874,680 774,690 834,760 744,740" fill="#b98a68"/>
+
+    <!-- head -->
+    <ellipse cx="512" cy="560" rx="300" ry="270" fill="#b98a68"/>
+    <!-- crown fur tufts -->
+    <polygon points="448,320 478,228 510,312" fill="#b98a68"/>
+    <polygon points="500,312 528,222 560,316" fill="#b98a68"/>
+
+    <!-- grey mask around the eyes -->
+    <path d="M 512 430
+             C 420 400 320 430 280 510
+             C 255 565 270 630 330 650
+             C 400 672 480 640 512 600
+             C 544 640 624 672 694 650
+             C 754 630 769 565 744 510
+             C 704 430 604 400 512 430 Z" fill="#8e837c"/>
+
+    <!-- white blaze up the forehead -->
+    <path d="M 512 640 L 472 470 Q 512 300 552 470 Z" fill="#f5efe8"/>
+
+    <!-- muzzle + chin -->
+    <ellipse cx="512" cy="700" rx="170" ry="110" fill="#f5efe8"/>
+
+    <!-- eyes -->
+    <circle cx="385" cy="545" r="74" fill="#2a2620"/>
+    <circle cx="639" cy="545" r="74" fill="#2a2620"/>
+    <circle cx="385" cy="545" r="66" fill="#b9c23f"/>
+    <circle cx="639" cy="545" r="66" fill="#b9c23f"/>
+    <circle cx="385" cy="548" r="28" fill="#1c1a14"/>
+    <circle cx="639" cy="548" r="28" fill="#1c1a14"/>
+    <circle cx="403" cy="528" r="11" fill="#ffffff"/>
+    <circle cx="657" cy="528" r="11" fill="#ffffff"/>
+
+    <!-- nose + mouth -->
+    <path d="M 482 668 L 542 668 Q 552 672 540 692 L 520 712 Q 512 719 504 712 L 484 692 Q 472 672 482 668 Z" fill="#e59aa0"/>
+    <path d="M 512 716 L 512 740 M 512 740 Q 482 772 452 746 M 512 740 Q 542 772 572 746"
+          fill="none" stroke="#5a4a40" stroke-width="10" stroke-linecap="round"/>
+
+    <!-- whiskers -->
+    <g stroke="#f5efe8" stroke-width="9" stroke-linecap="round" fill="none">
+      <path d="M 360 680 Q 260 660 180 622"/>
+      <path d="M 360 712 Q 255 710 170 700"/>
+      <path d="M 364 744 Q 265 764 190 782"/>
+      <path d="M 664 680 Q 764 660 844 622"/>
+      <path d="M 664 712 Q 769 710 854 700"/>
+      <path d="M 660 744 Q 759 764 834 782"/>
+    </g>
+  </g>
+</svg>

@@ -2,6 +2,7 @@
 .venv
 .idea
 __pycache__
+**/__pycache__
 *.pyc
 .DS_Store
 data
@@ -9,4 +10,8 @@ data
 *.json
 !actions.example.json
 *.tmp
-app
+app/node_modules
+app/www
+app/.angular
+app/ios
+app/android

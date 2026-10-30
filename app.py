@@ -224,7 +224,8 @@ class Auth:
     - HTTP Basic (the web dashboard in a browser)
     - Authorization: Bearer <access token> (the mobile app, /api/v1)
     - ?token=<stream token> on camera streams/clips and the WebSocket, which can't send headers
-    Open: /healthz (Docker healthcheck), app login/refresh, CORS preflights."""
+    Open: /healthz (Docker healthcheck), app login/refresh, CORS preflights,
+    and the PWA shell under /app (static files only; everything it calls needs a token)."""
 
     OPEN = {"/healthz", "/api/v1/auth/login", "/api/v1/auth/refresh"}
     STREAM = re.compile(r"^/api(/v1)?/(ws|cameras/[^/]+/(live|snapshot|recordings/file))$")
@@ -236,6 +237,8 @@ class Auth:
     def _allowed(self, scope) -> bool:
         path = scope["path"]
         if path in self.OPEN or scope.get("method") == "OPTIONS":
+            return True
+        if path == "/app" or path.startswith("/app/"):
             return True
         header = dict(scope["headers"]).get(b"authorization", b"").decode("latin-1")
         scheme, _, cred = header.partition(" ")
@@ -285,6 +288,21 @@ api = APIRouter()  # mounted at /api (web dashboard) and /api/v1 (mobile app), s
 async def healthz():
     return {"ok": True}
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
+
+# The mobile app as an installable PWA. Built from app/ with --base-href /app/;
+# the Docker build stage puts it in ./app-www, a local checkout has it in app/www.
+APP_WWW = next((p.resolve() for p in (BASE / "app-www", BASE / "app" / "www")
+                if (p / "index.html").is_file()), None)
+if APP_WWW:
+    @app.get("/app", include_in_schema=False)
+    @app.get("/app/{path:path}", include_in_schema=False)
+    async def pwa(path: str = ""):
+        file = (APP_WWW / path).resolve()
+        if path and file.is_file() and file.is_relative_to(APP_WWW):
+            return FileResponse(file)
+        return FileResponse(APP_WWW / "index.html")  # deep links go to the Angular router
+else:
+    log.info("PWA build not found (app/www): /app not served")
 
 
 # ---------------------------------------------------------------- REST

@@ -1,3 +1,11 @@
+# Build the mobile app as a PWA served by the backend at /app
+FROM node:22-slim AS pwa
+WORKDIR /build
+COPY app/package.json app/package-lock.json ./
+RUN npm ci
+COPY app/ .
+RUN npx ng build --configuration production --base-href /app/
+
 FROM python:3.12-slim
 
 # ffmpeg: live camera video (RTSP -> MJPEG); tzdata: local hours/days for the energy chart
@@ -11,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py ./
 COPY static ./static
+COPY --from=pwa /build/www ./app-www
 
 # config + state live in the mounted /data volume (see docker-compose.yml)
 ENV DATA_DIR=/data \
