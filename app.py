@@ -57,6 +57,7 @@ manager = DeviceManager(
     rediscover_seconds=float(os.getenv("REDISCOVER_SECONDS", "300")),
     protected=os.getenv("CONFIRM_OFF", "").split(","),
     energy_file=DATA / ".plug_energy.json",
+    rooms_file=DATA / "rooms.json",
 )
 cameras = CameraManager(
     os.getenv("CAMERAS", ""),

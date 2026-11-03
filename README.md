@@ -23,7 +23,7 @@ rsync -av --exclude .venv --exclude .git --exclude .idea --exclude __pycache__ \
   --exclude '*.json' --exclude .env ./ user@server:~/tapo-dashboard/
 ssh user@server mkdir -p tapo-dashboard/data
 scp .env devices.json tinytuya.json .smartthings_tokens.json .tuya_energy.json .tuya_energy_hourly.json \
-  user@server:~/tapo-dashboard/data/        # plus actions.json if you have one
+  user@server:~/tapo-dashboard/data/        # plus actions.json / rooms.json if you have them
 
 # on the server
 cd ~/tapo-dashboard
@@ -41,6 +41,8 @@ docker compose logs -f
 
 - Bulbs, plugs and other switchable devices: on/off toggle, plus a brightness slider when the bulb is dimmable.
 - H100 hub: paired devices are grouped under it. Sensor values (battery, temperature, humidity…) show as chips.
+- T310/T315 temperature sensors: the reading shows big on the device tile, and the app's home screen gets a climate card with temperature and humidity.
+- Rooms: copy `rooms.example.json` to `rooms.json` (next to `.env`; in `data/` on Docker) and map room name → list of device aliases. Devices are then grouped by room on the dashboard and in the app; unassigned ones land in "Other". The Tapo app keeps its room assignments in TP-Link's cloud with no public API, so this file is the source of truth — it's re-read when it changes, no restart needed. Without the file the UI keeps the flat Lights/Plugs layout.
 - S200B buttons: the hub is polled every `HUB_POLL_SECONDS`. New trigger-log entries show up in the "Button presses" feed and the card flashes.
 - Automations: copy `actions.example.json` to `actions.json` and map button alias → event → action. The supported actions are `toggle`, `on`, `off` (one alias or a list) and `"all_off"`. The file is reloaded on each press, so you don't need to restart. Event names come from the hub (e.g. `singleClick`, `doubleClick`, `rotation`); check the feed to see the exact names.
 - Cameras (yi-hack): set `CAMERAS=Name=IP` in `.env`. The backend fetches the camera's `/cgi-bin/snapshot.sh` and the page refreshes it every `SNAPSHOT_SECONDS`. Click a camera to open **live video** in a modal (HD/SD toggle). The backend starts `ffmpeg` (`brew install ffmpeg`) on demand, turns the camera's RTSP stream into MJPEG (`LIVE_FPS`, `LIVE_MAX_WIDTH`), shares it between viewers and stops it 10 s after the last one closes. Without ffmpeg, the modal falls back to HD snapshots. The RTSP URL is shown on the card for VLC. Use `Name=http://user:pass@IP` if you set a web UI password; the credentials stay on the server.

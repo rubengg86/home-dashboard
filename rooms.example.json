@@ -1,0 +1,6 @@
+{
+  "Salón": ["Salón", "Salón pared"],
+  "Dormitorio": ["Dormitorio", "Botón Cama 1", "Botón Cama 2"],
+  "Oficina": ["Oficina", "Botón Oficina"],
+  "Planta Baja": ["Temperatura Planta Baja"]
+}

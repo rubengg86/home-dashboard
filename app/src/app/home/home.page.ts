@@ -5,9 +5,9 @@ import {
   IonTitle, IonToggle, IonToolbar, ModalController,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
-import { flame, personCircleOutline, powerOutline, shirtOutline, videocamOutline, waterOutline } from 'ionicons/icons';
+import { flame, personCircleOutline, powerOutline, shirtOutline, thermometerOutline, videocamOutline, waterOutline } from 'ionicons/icons';
 import { AuthService } from '../core/auth.service';
-import { eventLabel, fmtKWh, fmtMoney, fmtW, hhmm, minutesUntil, timeAgo } from '../core/format';
+import { eventLabel, fmtKWh, fmtMoney, fmtTemp, fmtW, hhmm, minutesUntil, timeAgo } from '../core/format';
 import { LiveService } from '../core/live.service';
 import { Camera, Heater } from '../core/models';
 import { CameraLiveComponent } from '../shared/camera-live.component';
@@ -30,7 +30,7 @@ export class HomePage {
   private router = inject(Router);
   private sheets = inject(ActionSheetController);
   private modals = inject(ModalController);
-  readonly fmtW = fmtW; readonly fmtKWh = fmtKWh; readonly fmtMoney = fmtMoney;
+  readonly fmtW = fmtW; readonly fmtKWh = fmtKWh; readonly fmtMoney = fmtMoney; readonly fmtTemp = fmtTemp;
   readonly hhmm = hhmm; readonly eventLabel = eventLabel; readonly timeAgo = timeAgo; readonly minutesUntil = minutesUntil;
 
   private now = signal(Date.now());
@@ -52,7 +52,7 @@ export class HomePage {
   readonly running = computed(() => this.live.appliances().appliances.filter((a) => a.status !== 'Off'));
 
   constructor() {
-    addIcons({ flame, personCircleOutline, powerOutline, shirtOutline, videocamOutline, waterOutline });
+    addIcons({ flame, personCircleOutline, powerOutline, shirtOutline, thermometerOutline, videocamOutline, waterOutline });
     setInterval(() => this.now.set(Date.now()), 30_000);  // keeps "x min left" fresh
   }
 

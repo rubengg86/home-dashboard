@@ -9,6 +9,12 @@ ion-title { font-size: 22px; font-weight: 700; padding-top: 6px; }
 .hero-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px;
   ion-button { margin: 0; --border-radius: 999px; } }
 
+.climate { padding: 6px 16px; }
+.clim { display: flex; align-items: center; gap: 12px; padding: 10px 0;
+  & + & { border-top: 1px solid var(--app-line); }
+  &.offline { opacity: .55; }
+  .big { font-size: 32px; } }
+
 .heater-w { margin-top: 12px; }
 .boosts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
   ion-button { margin: 0; --border-radius: 999px; } }

@@ -21,6 +21,7 @@ export interface Device {
   alias: string;
   model: string;
   type: string; // bulb | plug | hub | sensor | ...
+  room: string | null; // from the server's rooms.json; null = not assigned
   host: string;
   online: boolean;
   error: string | null;
@@ -31,6 +32,16 @@ export interface Device {
   brightness: number | null;
   sensors: Sensor[];
   children?: Device[];
+}
+
+/** A temperature/humidity sensor (e.g. T310 on the hub), pulled out of a device's sensor list. */
+export interface Climate {
+  id: string;
+  name: string;
+  room: string | null;
+  temperature: number;
+  humidity: number | null;
+  online: boolean;
 }
 
 export interface Heater {

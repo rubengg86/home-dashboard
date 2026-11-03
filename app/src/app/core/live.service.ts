@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { App } from '@capacitor/app';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
-import { Appliances, Cameras, DashEvent, Device, Energy, Heater, Overview, Sensor } from './models';
+import { Appliances, Cameras, Climate, DashEvent, Device, Energy, Heater, Overview, Sensor } from './models';
 
 /**
  * The app's single source of truth: loads /overview, then keeps it current from the WebSocket
@@ -31,6 +31,15 @@ export class LiveService {
   readonly hubs = computed(() => this.devices().filter((d) => d.children?.length));
   readonly lights = computed(() => this.devices().filter((d) => !d.children?.length && isLight(d)));
   readonly plugs = computed(() => this.devices().filter((d) => !d.children?.length && !isLight(d) && d.switchable));
+
+  /** Temperature/humidity readings (T310-style sensors, usually hub children). */
+  readonly climate = computed<Climate[]>(() => this.allDevices().flatMap((d) => {
+    const t = sensor(d, 'temperature');
+    if (typeof t !== 'number') return [];
+    const h = sensor(d, 'humidity');
+    return [{ id: d.id, name: d.alias, room: d.room ?? null, temperature: t,
+              humidity: typeof h === 'number' ? h : null, online: d.online }];
+  }));
 
   /** Live power of everything that meters it (plugs + heater), W. */
   readonly powerNow = computed(() => {

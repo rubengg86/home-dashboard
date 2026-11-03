@@ -390,13 +390,20 @@ let dragging = null;   // slider being dragged: don't re-render under the user's
 const EVENT_LABEL = { singleClick: "Single press", doubleClick: "Double press", rotation: "Rotated",
                       started: "Cycle started", finished: "Cycle finished", heating: "Heating",
                       hot_water_ready: "Hot water ready", safety_off: "Safety off" };
-const fmtVal = (v, unit) => typeof v === "boolean" ? (v ? "yes" : "no") : unit ? `${v} ${unit}` : v;
+const UNIT_LABEL = { celsius: "°C", fahrenheit: "°F" };
+const fmtVal = (v, unit) => typeof v === "boolean" ? (v ? "yes" : "no") : unit ? `${v} ${UNIT_LABEL[unit] || unit}` : v;
+const tempOf = (d) => d.sensors?.find((s) => s.id === "temperature" && typeof s.value === "number");
 
 function tile(d, parentOnline = true) {
   const online = d.online && parentOnline;
-  const chips = d.sensors.map((s) => `<span class="chip">${esc(s.name)} <b>${esc(fmtVal(s.value, s.unit))}</b></span>`).join("");
+  const temp = tempOf(d);
+  const hum = temp && d.sensors.find((s) => s.id === "humidity");
+  // a temperature sensor shows its reading big instead of generic chips
+  const chips = d.sensors.filter((s) => !temp || (s.id !== "temperature" && s.id !== "humidity"))
+    .map((s) => `<span class="chip">${esc(s.name)} <b>${esc(fmtVal(s.value, s.unit))}</b></span>`).join("");
   const ev = lastEvent[d.id];
   const status = d.switchable ? (d.on ? (d.dimmable && d.brightness != null ? `On · ${d.brightness}%` : "On") : "Off")
+               : temp ? (hum ? `${esc(hum.value)}% humidity` : esc(d.model))
                : ev ? `${EVENT_LABEL[ev.event] || ev.event} · ${hhmm(ev.received || Date.now())}` : esc(d.model);
   return `
   <div class="tile ${d.on ? "on" : ""} ${online ? "" : "offline"} ${d.switchable && online ? "click" : ""}" data-id="${esc(d.id)}" ${d.switchable && online ? 'data-act="toggle"' : ""}>
@@ -404,6 +411,7 @@ function tile(d, parentOnline = true) {
       <span class="ico">${iconFor(d)}</span>
       ${d.switchable ? `<button class="switch ${d.on ? "on" : ""}" data-act="toggle" aria-label="Toggle ${esc(d.alias)}" ${online ? "" : "disabled"}></button>` : ""}
     </div>
+    ${temp ? `<div class="big" style="font-variant-numeric:tabular-nums">${temp.value.toFixed(1)}°</div>` : ""}
     <div style="min-width:0">
       <div class="name" title="${esc(d.alias)}">${esc(d.alias)}</div>
       <div class="meta">${online ? status : "Offline"}</div>
@@ -420,22 +428,40 @@ function render() {
   if (!devices.length) { root.innerHTML = `<div class="empty">Looking for devices… discovery can take a few seconds.</div>`; return; }
   const hubs = devices.filter((d) => d.children && d.children.length);
   const rest = devices.filter((d) => !(d.children && d.children.length));
-  const onCount = (list) => list.filter((d) => d.on).length;
-  // plugs carry energy readings and make much taller tiles, so they get their own row
   const isLight = (d) => iconFor(d) === ICONS.bulb;
-  const section = (title, list) => list.length ? `<h2>${title} <span class="count">${onCount(list)} of ${list.length} on</span></h2>
-    <div class="grid">${list.map((d) => tile(d)).join("")}</div>` : "";
-  let html = section("Lights", rest.filter(isLight)) + section("Plugs", rest.filter((d) => !isLight(d)));
-  for (const h of hubs) {
-    html += `<h2>${esc(h.alias)} <span class="count">${h.children.length} paired</span></h2>
-      <div class="hub">
-        <div class="top"><div class="row" style="display:flex;gap:10px;align-items:center;min-width:0">
-          <span class="ico">${ICONS.hub}</span>
-          <div style="min-width:0"><div class="name">${esc(h.model)}</div><div class="meta">${esc(h.host)} · ${h.online ? "online" : "offline"}</div></div></div>
-        </div>
-        ${h.error ? `<div class="err" style="margin-bottom:8px">${esc(h.error)}</div>` : ""}
-        <div class="grid">${h.children.map((c) => tile(c, h.online)).join("")}</div>
-      </div>`;
+  const section = (title, list) => {
+    if (!list.length) return "";
+    const sw = list.filter((d) => d.switchable);
+    const count = sw.length ? ` <span class="count">${sw.filter((d) => d.on).length} of ${sw.length} on</span>` : "";
+    return `<h2>${title}${count}</h2><div class="grid">${list.map((d) => tile(d)).join("")}</div>`;
+  };
+  const hubCard = (h, children) => `<h2>${esc(h.alias)} <span class="count">${h.children.length} paired</span></h2>
+    <div class="hub">
+      <div class="top"><div class="row" style="display:flex;gap:10px;align-items:center;min-width:0">
+        <span class="ico">${ICONS.hub}</span>
+        <div style="min-width:0"><div class="name">${esc(h.model)}</div><div class="meta">${esc(h.host)} · ${h.online ? "online" : "offline"}</div></div></div>
+      </div>
+      ${h.error ? `<div class="err" style="margin-bottom:8px">${esc(h.error)}</div>` : ""}
+      ${children.length ? `<div class="grid">${children.map((c) => tile(c, h.online)).join("")}</div>` : ""}
+    </div>`;
+  // a hub child's `online` already mirrors the hub's, so it can stand alone in a room group
+  const flat = [...rest, ...hubs.flatMap((h) => h.children)];
+  let html = "";
+  if (flat.some((d) => d.room)) {
+    // grouped by room (rooms.json on the server); unassigned devices land in "Other"
+    const rank = (d) => isLight(d) ? 0 : d.switchable ? 1 : tempOf(d) ? 2 : 3;
+    const rooms = new Map();
+    for (const d of flat) {
+      const k = d.room || "Other";
+      if (!rooms.has(k)) rooms.set(k, []);
+      rooms.get(k).push(d);
+    }
+    for (const name of [...rooms.keys()].sort((a, b) => (a === "Other") - (b === "Other") || a.localeCompare(b)))
+      html += section(esc(name), rooms.get(name).sort((a, b) => rank(a) - rank(b) || a.alias.localeCompare(b.alias)));
+    for (const h of hubs) html += hubCard(h, []);  // children already shown in their rooms
+  } else {
+    html = section("Lights", rest.filter(isLight)) + section("Plugs", rest.filter((d) => !isLight(d)));
+    for (const h of hubs) html += hubCard(h, h.children);
   }
   root.innerHTML = html;
 }

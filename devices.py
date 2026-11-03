@@ -76,6 +76,7 @@ class DeviceManager:
         rediscover_seconds: float = 300,
         protected: list[str] | None = None,
         energy_file: Path | None = None,
+        rooms_file: Path | None = None,
     ) -> None:
         self.creds = Credentials(username, password)
         self.hosts = [h.strip() for h in (hosts or []) if h.strip()]
@@ -98,6 +99,10 @@ class DeviceManager:
         self.energy_file = energy_file
         self._plug_energy: dict[str, dict] = self._load_plug_energy()
         self._energy_lock = asyncio.Lock()
+        # rooms.json maps room name -> alias(es); the devices don't know their Tapo room locally
+        self.rooms_file = rooms_file
+        self._rooms: dict[str, str] = {}      # alias (lower) -> room name
+        self._rooms_mtime: float | None = None
 
     # ------------------------------------------------------------------ lifecycle
     def subscribe(self, fn: Listener) -> None:
@@ -418,6 +423,30 @@ class DeviceManager:
     def _protected(self, dev: Device) -> bool:
         return (dev.alias or "").strip().lower() in self.protected
 
+    # ------------------------------------------------------------------ rooms
+    def _room_for(self, dev: Device) -> str | None:
+        """The Tapo app keeps room assignments in its cloud, which has no public API, so we read
+        them from rooms.json ({"Room": ["alias", ...]}); the file is re-read when it changes."""
+        if not self.rooms_file:
+            return None
+        try:
+            mtime = self.rooms_file.stat().st_mtime
+        except OSError:  # no rooms.json: everything stays ungrouped
+            self._rooms, self._rooms_mtime = {}, None
+            return None
+        if mtime != self._rooms_mtime:
+            self._rooms_mtime = mtime
+            try:
+                data = json.loads(self.rooms_file.read_text())
+                self._rooms = {str(a).strip().lower(): str(room)
+                               for room, aliases in data.items()
+                               for a in (aliases if isinstance(aliases, list) else [aliases])}
+                log.info("Loaded %d device-room assignments from %s", len(self._rooms), self.rooms_file.name)
+            except Exception as e:  # noqa: BLE001
+                log.error("Could not read %s: %s", self.rooms_file, e)
+                self._rooms = {}
+        return self._rooms.get((dev.alias or "").strip().lower())
+
     # ------------------------------------------------------------------ snapshot
     def _serialize(self, dev: Device, tr: Tracked, is_child: bool) -> dict:
         state = dev.features.get("state")
@@ -439,6 +468,7 @@ class DeviceManager:
             "alias": dev.alias or dev.model,
             "model": dev.model,
             "type": _device_type(dev),
+            "room": self._room_for(dev),
             "host": tr.dev.host,
             "online": tr.online,
             "error": None if is_child else tr.error,
@@ -460,7 +490,7 @@ class DeviceManager:
                 out.append(self._serialize(tr.dev, tr, False))
             except Exception as e:  # noqa: BLE001
                 log.debug("serialize failed for %s: %s", tr.dev.host, e)
-                out.append({"id": tr.dev.host, "alias": tr.dev.host, "model": "?", "type": "unknown",
+                out.append({"id": tr.dev.host, "alias": tr.dev.host, "model": "?", "type": "unknown", "room": None,
                             "host": tr.dev.host, "online": False, "error": str(e), "switchable": False,
                             "on": None, "dimmable": False, "brightness": None, "sensors": [], "children": []})
         return sorted(out, key=lambda d: (d["type"] != "hub", d["alias"].lower()))

@@ -41,6 +41,22 @@
     </div>
   </div>
 
+  <!-- temperature sensors -->
+  @if (live.climate().length) {
+    <div class="card climate">
+      @for (c of live.climate(); track c.id) {
+        <div class="clim" [class.offline]="!c.online">
+          <span class="ico"><ion-icon name="thermometer-outline"></ion-icon></span>
+          <div class="grow">
+            <div class="name">{{ c.room || c.name }}</div>
+            <div class="meta">{{ !c.online ? 'Offline' : c.humidity != null ? c.humidity + '% humidity' : 'Temperature' }}</div>
+          </div>
+          <div class="big tnum">{{ fmtTemp(c.temperature) }}</div>
+        </div>
+      }
+    </div>
+  }
+
   <!-- heater -->
   @for (h of live.heaters(); track h.id) {
     <div class="card" [class.on]="h.on && h.online" [class.offline]="!h.online">

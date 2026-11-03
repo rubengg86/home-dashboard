@@ -12,48 +12,143 @@
 
   @if (!live.loaded()) { <div class="meta empty">Loading devices…</div> }
 
-  <!-- lights -->
-  @if (live.lights().length) {
-    <div class="section-title">Lights <span>{{ lightsOn() }} of {{ live.lights().length }} on</span></div>
-    <div class="grid">
-      @for (d of live.lights(); track d.id) {
-        <div class="card tile" [class.on]="d.on" [class.offline]="!d.online">
+  @if (roomGroups(); as rooms) {
+    <!-- grouped by room (rooms.json on the server) -->
+    @for (r of rooms; track r.name) {
+      <div class="section-title">{{ r.name }}
+        @if (r.switchable) { <span>{{ r.on }} of {{ r.switchable }} on</span> }
+      </div>
+      <div class="grid">
+        @for (d of r.devices; track d.id) {
+          @if (temp(d) != null) {
+            <!-- temperature/humidity sensor -->
+            <div class="card tile" [class.offline]="!d.online">
+              <span class="ico"><ion-icon name="thermometer-outline"></ion-icon></span>
+              <div class="big tnum temp">{{ fmtTemp(temp(d)) }}</div>
+              <div class="name">{{ d.alias }}</div>
+              <div class="meta">{{ !d.online ? 'Offline' : humidity(d) != null ? humidity(d) + '% humidity' : d.model }}</div>
+            </div>
+          } @else if (d.switchable) {
+            <!-- light or plug -->
+            <div class="card tile" [class.on]="d.on" [class.offline]="!d.online">
+              <div class="row">
+                <span class="ico"><ion-icon [name]="isLight(d) ? (d.on ? 'bulb' : 'bulb-outline') : 'radio-button-on-outline'"></ion-icon></span>
+                <span class="grow"></span>
+                <ion-toggle [checked]="!!d.on" [disabled]="!d.online" (ionChange)="toggle(d, $event)" [attr.aria-label]="d.alias"></ion-toggle>
+              </div>
+              <div class="name">{{ d.alias }}
+                @if (d.confirm_off) { <ion-icon class="lock" name="lock-closed-outline" aria-label="Protected"></ion-icon> }
+              </div>
+              <div class="meta">{{ !d.online ? 'Offline' : d.on ? (d.dimmable ? 'On · ' + d.brightness + '%' : 'On') : 'Off' }}</div>
+              @if (d.dimmable) {
+                <ion-range [min]="1" [max]="100" [value]="d.brightness ?? 50" [disabled]="!d.online" (ionChange)="bright(d, $event)"
+                           [attr.aria-label]="'Brightness ' + d.alias"></ion-range>
+              }
+              @if (power(d) != null || today(d) != null) {
+                <div class="chips">
+                  @if (power(d) != null) { <span class="chip">Now <b>{{ fmtW(power(d)) }}</b></span> }
+                  @if (today(d) != null) { <span class="chip">Today <b>{{ fmtKWh(today(d)) }}</b></span> }
+                </div>
+              }
+            </div>
+          } @else {
+            <!-- button or other sensor -->
+            <div class="card tile" [class.offline]="!d.online">
+              <span class="ico"><ion-icon name="ellipse-outline"></ion-icon></span>
+              <div class="name">{{ d.alias }}</div>
+              <div class="meta">
+                @if (lastEvent().get(d.id); as e) { {{ eventLabel(e.event) }} · {{ timeAgo(e.received || e.timestamp) }} }
+                @else { {{ d.model }} }
+              </div>
+            </div>
+          }
+        }
+      </div>
+    }
+    <!-- hub status -->
+    @for (hub of live.hubs(); track hub.id) {
+      <div class="card hubline" [class.offline]="!hub.online">
+        <div class="row">
+          <span class="ico"><ion-icon name="git-network-outline"></ion-icon></span>
+          <div class="grow">
+            <div class="name">{{ hub.alias }}</div>
+            <div class="meta">{{ hub.model }} · {{ hub.children!.length }} paired · {{ hub.online ? 'online' : 'offline' }}</div>
+          </div>
+        </div>
+        @if (hub.error) { <div class="err">{{ hub.error }}</div> }
+      </div>
+    }
+  } @else {
+    <!-- no rooms configured: flat layout -->
+    <!-- lights -->
+    @if (live.lights().length) {
+      <div class="section-title">Lights <span>{{ lightsOn() }} of {{ live.lights().length }} on</span></div>
+      <div class="grid">
+        @for (d of live.lights(); track d.id) {
+          <div class="card tile" [class.on]="d.on" [class.offline]="!d.online">
+            <div class="row">
+              <span class="ico"><ion-icon [name]="d.on ? 'bulb' : 'bulb-outline'"></ion-icon></span>
+              <span class="grow"></span>
+              <ion-toggle [checked]="!!d.on" [disabled]="!d.online" (ionChange)="toggle(d, $event)" [attr.aria-label]="d.alias"></ion-toggle>
+            </div>
+            <div class="name">{{ d.alias }}</div>
+            <div class="meta">{{ !d.online ? 'Offline' : d.on ? (d.dimmable ? 'On · ' + d.brightness + '%' : 'On') : 'Off' }}</div>
+            @if (d.dimmable) {
+              <ion-range [min]="1" [max]="100" [value]="d.brightness ?? 50" [disabled]="!d.online" (ionChange)="bright(d, $event)"
+                         [attr.aria-label]="'Brightness ' + d.alias"></ion-range>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- plugs -->
+    @if (live.plugs().length) {
+      <div class="section-title">Plugs <span>{{ plugsOn() }} of {{ live.plugs().length }} on</span></div>
+      @for (d of live.plugs(); track d.id) {
+        <div class="card" [class.on]="d.on" [class.offline]="!d.online">
           <div class="row">
-            <span class="ico"><ion-icon [name]="d.on ? 'bulb' : 'bulb-outline'"></ion-icon></span>
-            <span class="grow"></span>
+            <span class="ico"><ion-icon name="radio-button-on-outline"></ion-icon></span>
+            <div class="grow">
+              <div class="name">{{ d.alias }}
+                @if (d.confirm_off) { <ion-icon class="lock" name="lock-closed-outline" aria-label="Protected"></ion-icon> }
+              </div>
+              <div class="meta">{{ d.model }} · {{ !d.online ? 'Offline' : d.on ? 'On' : 'Off' }}</div>
+            </div>
             <ion-toggle [checked]="!!d.on" [disabled]="!d.online" (ionChange)="toggle(d, $event)" [attr.aria-label]="d.alias"></ion-toggle>
           </div>
-          <div class="name">{{ d.alias }}</div>
-          <div class="meta">{{ !d.online ? 'Offline' : d.on ? (d.dimmable ? 'On · ' + d.brightness + '%' : 'On') : 'Off' }}</div>
-          @if (d.dimmable) {
-            <ion-range [min]="1" [max]="100" [value]="d.brightness ?? 50" [disabled]="!d.online" (ionChange)="bright(d, $event)"
-                       [attr.aria-label]="'Brightness ' + d.alias"></ion-range>
+          @if (power(d) != null || today(d) != null) {
+            <div class="chips">
+              @if (power(d) != null) { <span class="chip">Now <b>{{ fmtW(power(d)) }}</b></span> }
+              @if (today(d) != null) { <span class="chip">Today <b>{{ fmtKWh(today(d)) }}</b></span> }
+            </div>
           }
         </div>
       }
-    </div>
-  }
+    }
 
-  <!-- plugs -->
-  @if (live.plugs().length) {
-    <div class="section-title">Plugs <span>{{ plugsOn() }} of {{ live.plugs().length }} on</span></div>
-    @for (d of live.plugs(); track d.id) {
-      <div class="card" [class.on]="d.on" [class.offline]="!d.online">
-        <div class="row">
-          <span class="ico"><ion-icon name="radio-button-on-outline"></ion-icon></span>
-          <div class="grow">
-            <div class="name">{{ d.alias }}
-              @if (d.confirm_off) { <ion-icon class="lock" name="lock-closed-outline" aria-label="Protected"></ion-icon> }
+    <!-- hubs and their children -->
+    @for (hub of live.hubs(); track hub.id) {
+      <div class="section-title">{{ hub.alias }} <span>{{ hub.children!.length }} paired · {{ hub.online ? 'online' : 'offline' }}</span></div>
+      <div class="grid">
+        @for (c of hub.children; track c.id) {
+          @if (temp(c) != null) {
+            <div class="card tile" [class.offline]="!hub.online">
+              <span class="ico"><ion-icon name="thermometer-outline"></ion-icon></span>
+              <div class="big tnum temp">{{ fmtTemp(temp(c)) }}</div>
+              <div class="name">{{ c.alias }}</div>
+              <div class="meta">{{ humidity(c) != null ? humidity(c) + '% humidity' : c.model }}</div>
             </div>
-            <div class="meta">{{ d.model }} · {{ !d.online ? 'Offline' : d.on ? 'On' : 'Off' }}</div>
-          </div>
-          <ion-toggle [checked]="!!d.on" [disabled]="!d.online" (ionChange)="toggle(d, $event)" [attr.aria-label]="d.alias"></ion-toggle>
-        </div>
-        @if (power(d) != null || today(d) != null) {
-          <div class="chips">
-            @if (power(d) != null) { <span class="chip">Now <b>{{ fmtW(power(d)) }}</b></span> }
-            @if (today(d) != null) { <span class="chip">Today <b>{{ fmtKWh(today(d)) }}</b></span> }
-          </div>
+          } @else {
+            <div class="card tile" [class.offline]="!hub.online">
+              <span class="ico"><ion-icon name="ellipse-outline"></ion-icon></span>
+              <div class="name">{{ c.alias }}</div>
+              <div class="meta">
+                @if (lastEvent().get(c.id); as e) { {{ eventLabel(e.event) }} · {{ timeAgo(e.received || e.timestamp) }} }
+                @else { {{ c.model }} }
+              </div>
+            </div>
+          }
         }
       </div>
     }
@@ -74,22 +169,5 @@
         </div>
       </div>
     }
-  }
-
-  <!-- hubs and their buttons -->
-  @for (hub of live.hubs(); track hub.id) {
-    <div class="section-title">{{ hub.alias }} <span>{{ hub.children!.length }} paired · {{ hub.online ? 'online' : 'offline' }}</span></div>
-    <div class="grid">
-      @for (c of hub.children; track c.id) {
-        <div class="card tile" [class.offline]="!hub.online">
-          <span class="ico"><ion-icon name="ellipse-outline"></ion-icon></span>
-          <div class="name">{{ c.alias }}</div>
-          <div class="meta">
-            @if (lastEvent().get(c.id); as e) { {{ eventLabel(e.event) }} · {{ timeAgo(e.received || e.timestamp) }} }
-            @else { {{ c.model }} }
-          </div>
-        </div>
-      }
-    </div>
   }
 </ion-content>

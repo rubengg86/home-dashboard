@@ -7,6 +7,9 @@ export const fmtKWh = (v: number | null | undefined, fine = false): string =>
 export const fmtMoney = (v: number | null | undefined, cur: string): string =>
   v == null ? '–' : `${cur}${v.toFixed(2)}`;
 
+export const fmtTemp = (v: number | null | undefined): string =>
+  v == null ? '–' : `${v.toFixed(1)}°`;
+
 export const hhmm = (iso: string | number | Date): string =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
