@@ -2,9 +2,13 @@ ion-title { font-size: 22px; font-weight: 700; }
 .empty { padding: 24px 4px; }
 ion-segment { margin-bottom: 14px; }
 ion-segment-button { text-transform: none; letter-spacing: 0; min-width: 0; font-size: 14px; }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 2px;
+.hero-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.hero .big { font-size: 40px; }
+.right { text-align: right; }
+.mid { font-size: 20px; font-weight: 700; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 2px;
   .stat { margin: 0; padding: 12px 14px; }
-  .v { font-size: 20px; font-weight: 750; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; } }
+  .v { font-size: 18px; font-weight: 750; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; } }
 .stats + .card { margin-top: 12px; }
 .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 ion-segment.unit { width: 140px; margin: 0; }

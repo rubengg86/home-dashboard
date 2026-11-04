@@ -7,6 +7,21 @@
 <ion-content class="ion-padding">
   <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
 
+  <!-- power right now + today -->
+  <div class="card hero">
+    <div class="hero-row">
+      <div>
+        <div class="meta">Using now</div>
+        <div class="big">{{ fmtW(live.powerNow()) }}</div>
+      </div>
+      <div class="right">
+        <div class="meta">Today</div>
+        <div class="mid tnum">{{ today() ? fmtKWh(today()!.kwh) : '–' }}</div>
+        @if (today()?.cost != null) { <div class="meta tnum">{{ fmtMoney(today()!.cost, live.currency()) }}</div> }
+      </div>
+    </div>
+  </div>
+
   <ion-segment [value]="range()" (ionChange)="range.set($any($event.detail.value))">
     <ion-segment-button value="24h"><ion-label>24 h</ion-label></ion-segment-button>
     <ion-segment-button value="7d"><ion-label>7 d</ion-label></ion-segment-button>
@@ -21,7 +36,6 @@
       <div class="card stat"><div class="v">{{ stats()?.kwh }}</div><div class="meta">Total</div></div>
       <div class="card stat"><div class="v">{{ stats()?.cost }}</div><div class="meta">Cost</div></div>
       <div class="card stat"><div class="v">{{ stats()?.avg }}</div><div class="meta">{{ stats()?.avgLabel }}</div></div>
-      <div class="card stat"><div class="v">{{ fmtW(live.powerNow()) }}</div><div class="meta">Now</div></div>
     </div>
 
     <div class="card">

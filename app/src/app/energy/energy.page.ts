@@ -18,12 +18,20 @@ const AVG = { '24h': 'Avg / hour', '7d': 'Avg / day', '30d': 'Avg / day', '12m':
 })
 export class EnergyPage {
   live = inject(LiveService);
-  readonly fmtW = fmtW;
+  readonly fmtW = fmtW; readonly fmtKWh = fmtKWh; readonly fmtMoney = fmtMoney;
   range = signal<EnergyRange>('30d');
   unit = signal<'kwh' | 'cost'>('kwh');
   showTable = signal(false);
 
   readonly data = this.live.energy;
+  /** Today's kWh across every metered device, from the energy history (last daily bucket). */
+  readonly today = computed(() => {
+    const e = this.data();
+    if (!e) return null;
+    const r = e.ranges['7d'], last = r.buckets.length - 1;
+    const kwh = e.series.reduce((a, s) => a + (r.values[s.id]?.[last] ?? 0), 0);
+    return { kwh, cost: e.price > 0 ? kwh * e.price : null };
+  });
   readonly priced = computed(() => (this.data()?.price ?? 0) > 0);
   readonly cost = computed(() => this.unit() === 'cost' && this.priced());
   readonly scale = computed(() => (this.cost() ? this.data()!.price : 1));

@@ -2,22 +2,12 @@ ion-title { font-size: 22px; font-weight: 700; padding-top: 6px; }
 .status { font-size: 12.5px; font-weight: 500; color: var(--app-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--app-bad); &.live { background: var(--app-ok); } }
 
-.hero-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
-.hero .big { font-size: 40px; }
-.right { text-align: right; }
-.mid { font-size: 20px; font-weight: 700; }
-.hero-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px;
-  ion-button { margin: 0; --border-radius: 999px; } }
-
 .climate { padding: 6px 16px; }
 .clim { display: flex; align-items: center; gap: 12px; padding: 10px 0;
   & + & { border-top: 1px solid var(--app-line); }
   &.offline { opacity: .55; }
   .big { font-size: 32px; } }
 
-.heater-w { margin-top: 12px; }
-.boosts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
-  ion-button { margin: 0; --border-radius: 999px; } }
 ion-toggle { --track-background-checked: var(--app-on); }
 
 .bar { height: 6px; border-radius: 999px; background: var(--app-card-2); overflow: hidden; margin-top: 12px;
@@ -27,6 +17,9 @@ ion-toggle { --track-background-checked: var(--app-on); }
 .cam-label { position: absolute; left: 10px; bottom: 10px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12.5px;
   padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
 
+.acc { width: 100%; background: none; border: 0; padding: 0; text-align: left; font: inherit;
+  font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
+  ion-icon { margin-left: auto; font-size: 16px; } }
 .list { padding: 4px 16px; }
 .ev { display: flex; gap: 10px; align-items: baseline; padding: 10px 0; font-size: 14px;
   & + & { border-top: 1px solid var(--app-line); } }

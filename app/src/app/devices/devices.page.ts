@@ -1,16 +1,16 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import {
   IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonRange, IonRefresher, IonRefresherContent, IonTitle,
   IonToggle, IonToolbar,
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
-  bulb, bulbOutline, ellipseOutline, flame, gitNetworkOutline, lockClosedOutline, radioButtonOnOutline,
-  refreshOutline, thermometerOutline,
+  bulb, bulbOutline, flame, gitNetworkOutline, lockClosedOutline, radioButtonOnOutline,
+  refreshOutline, thermometerOutline, waterOutline,
 } from 'ionicons/icons';
-import { eventLabel, fmtKWh, fmtTemp, fmtW, timeAgo } from '../core/format';
+import { fmtKWh, fmtMoney, fmtTemp, fmtW, hhmm, minutesUntil } from '../core/format';
 import { LiveService, isLight, sensor } from '../core/live.service';
-import { DashEvent, Device, Heater } from '../core/models';
+import { Device, Heater } from '../core/models';
 import { UiService } from '../shared/ui.service';
 
 /** One room section: its devices sorted lights → plugs → sensors/buttons. */
@@ -31,24 +31,21 @@ interface RoomGroup {
 export class DevicesPage {
   live = inject(LiveService);
   private ui = inject(UiService);
-  readonly fmtW = fmtW; readonly fmtKWh = fmtKWh; readonly fmtTemp = fmtTemp;
-  readonly eventLabel = eventLabel; readonly timeAgo = timeAgo; readonly isLight = isLight;
+  readonly fmtW = fmtW; readonly fmtKWh = fmtKWh; readonly fmtMoney = fmtMoney; readonly fmtTemp = fmtTemp;
+  readonly hhmm = hhmm; readonly isLight = isLight;
+  private now = signal(Date.now());
 
   readonly lightsOn = computed(() => this.live.lights().filter((d) => d.on).length);
   readonly plugsOn = computed(() => this.live.plugs().filter((d) => d.on).length);
-  /** Latest event per device (button presses). */
-  readonly lastEvent = computed(() => {
-    const m = new Map<string, DashEvent>();
-    for (const e of this.live.events()) if (!m.has(e.device_id)) m.set(e.device_id, e);
-    return m;
-  });
 
   /** Devices grouped by their Tapo room (rooms.json on the server), hub children included.
+   *  Buttons (not switchable, no readings) are hidden: they do their job without a tile.
    *  null when no device has a room, so the template keeps the flat Lights/Plugs layout. */
   readonly roomGroups = computed<RoomGroup[] | null>(() => {
-    const all = this.live.allDevices().filter((d) => d.type !== 'hub');
+    const all = this.live.allDevices()
+      .filter((d) => d.type !== 'hub' && (d.switchable || this.temp(d) != null));
     if (!all.some((d) => d.room)) return null;
-    const rank = (d: Device) => this.temp(d) != null ? 2 : isLight(d) ? 0 : d.switchable ? 1 : 3;
+    const rank = (d: Device) => this.temp(d) != null ? 2 : isLight(d) ? 0 : 1;
     const byRoom = new Map<string, Device[]>();
     for (const d of all) {
       const room = d.room || 'Other';
@@ -67,7 +64,40 @@ export class DevicesPage {
 
   constructor() {
     addIcons({ bulb, bulbOutline, flame, gitNetworkOutline, lockClosedOutline, radioButtonOnOutline,
-               ellipseOutline, refreshOutline, thermometerOutline });
+               refreshOutline, thermometerOutline, waterOutline });
+    setInterval(() => this.now.set(Date.now()), 30_000);  // keeps "x min left" fresh
+  }
+
+  heaterLabel(h: Heater): string {
+    return h.status === 'Hot' ? 'Hot water ready' : h.status;
+  }
+
+  boostLeft(h: Heater): number | null {
+    this.now();
+    return h.on ? minutesUntil(h.boost_ends_at) : null;
+  }
+
+  async boost(h: Heater, minutes: number): Promise<void> {
+    await this.ui.run(async () => {
+      await this.live.boost(h, minutes);
+      this.ui.toast(minutes ? `Boost ${minutes} min started` : 'Boost cancelled');
+    });
+  }
+
+  /** One-line status for a device row: state, brightness, live power, today's kWh. */
+  rowMeta(d: Device): string {
+    if (!d.online) return 'Offline';
+    if (this.temp(d) != null) {
+      const h = this.humidity(d);
+      return h != null ? `${h}% humidity` : d.model;
+    }
+    if (!d.on) return 'Off';
+    const parts = [d.dimmable ? `On · ${d.brightness}%` : 'On'];
+    const p = this.power(d);
+    if (p != null) parts.push(fmtW(p));
+    const t = this.today(d);
+    if (t != null) parts.push(`${fmtKWh(t)} today`);
+    return parts.join(' · ');
   }
 
   power(d: Device): number | null {

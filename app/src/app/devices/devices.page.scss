@@ -8,4 +8,21 @@ ion-toggle { --track-background-checked: var(--app-on); }
 ion-range { --bar-background-active: var(--app-on); --knob-size: 22px; padding: 0; margin-top: -4px; }
 .lock { font-size: 14px; color: var(--app-muted); vertical-align: -2px; margin-left: 4px; }
 .temp { font-size: 28px; margin-top: 2px; }
+
+// rooms: compact card per room, flowing into columns on wide screens
+.rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.room { margin: 0; padding: 6px 16px 8px; }
+.room-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 8px 0 6px;
+  .room-name { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--app-muted); } }
+.drow { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--app-line);
+  &.offline { opacity: .55; }
+  .ico { width: 34px; height: 34px; border-radius: 10px; font-size: 17px;
+    &.act { background: var(--app-on); color: var(--app-on-ink); } }
+  .name { font-size: 15px; }
+  .t { font-size: 22px; font-weight: 750; letter-spacing: -.02em; } }
+.drange { padding: 0 0 8px 46px; margin-top: -8px; }
+
 .hubline { margin-top: 16px; }
+.heater-w { margin-top: 12px; }
+.boosts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;
+  ion-button { margin: 0; --border-radius: 999px; } }
