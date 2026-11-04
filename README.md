@@ -94,6 +94,7 @@ CORS allows the Capacitor/Ionic origins (`capacitor://localhost`, `http://localh
 
 ## Troubleshooting
 
+- **Duplicated devices after the router restarted**: when DHCP hands out new IPs, each device is found again at its new address and the old entry would linger as an offline ghost. Duplicates are now dropped automatically on rediscovery (every 5 minutes, or press **Rediscover**); restarting the dashboard also clears them. Give the devices DHCP reservations to avoid the shuffle altogether.
 - **No devices**: broadcast discovery doesn't cross VLANs or Docker bridge networks. Set `TAPO_HOSTS=192.168.1.20,...` (include the H100) and give the devices DHCP reservations.
 - **Auth errors**: use your Tapo app email and password. Quote any special characters in `.env`.
 - **Empty S200B cards / no presses**: run `python discover.py` and check whether the button lists `trigger logs`. If it doesn't, your python-kasa version may name the module differently.

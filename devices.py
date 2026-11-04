@@ -160,7 +160,8 @@ class DeviceManager:
             interval = self.hub_poll_seconds if _device_type(dev) == "hub" else self.poll_seconds
             tr.task = asyncio.create_task(self._poll_loop(tr, interval))
             log.info("Tracking %s %s (%s) at %s", dev.model, dev.alias, _device_type(dev), host)
-        if new:
+        dropped = await self._drop_duplicates()
+        if new or dropped:
             await self._publish()
         if not self.tracked:
             log.warning("No devices found. Set TAPO_HOSTS if discovery is blocked on your network.")
@@ -169,6 +170,32 @@ class DeviceManager:
         while True:
             await asyncio.sleep(self.rediscover_seconds)
             await self.discover()
+
+    async def _drop_duplicates(self) -> bool:
+        """After a router or DHCP hiccup a device can come back on a new IP while its old entry is
+        still tracked, so the same device shows up twice (the old one forever offline). Keep one
+        entry per device id — an online one when there is one — and drop the rest."""
+        by_devid: dict[str, list[str]] = {}
+        for host, tr in self.tracked.items():
+            by_devid.setdefault(_device_id(tr.dev), []).append(host)
+        dropped = False
+        for hosts in by_devid.values():
+            if len(hosts) < 2:
+                continue
+            hosts.sort(key=lambda h: self.tracked[h].online)  # stable: ties keep the newest entry last
+            keep = self.tracked[hosts[-1]]
+            for host in hosts[:-1]:
+                tr = self.tracked.pop(host)
+                log.info("Dropping %s at %s: it is now tracked at %s", tr.dev.alias, host, keep.dev.host)
+                if tr.task:
+                    tr.task.cancel()
+                try:
+                    await tr.dev.disconnect()
+                except Exception:  # noqa: BLE001
+                    pass
+                dropped = True
+            self._index(keep)  # point by_id back at the entry we kept
+        return dropped
 
     def _index(self, tr: Tracked) -> None:
         self.by_id[_device_id(tr.dev)] = (tr.dev, tr)
