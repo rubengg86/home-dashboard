@@ -9,8 +9,10 @@ devices onto them); for now they label the heater cards.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import logging
+import time
 from typing import Any, Awaitable, Callable
 
 import websockets
@@ -34,6 +36,11 @@ class HomeAssistant:
         self.areas: dict[str, dict] = {}          # area_id -> {"name", "floor"}
         self.entity_area: dict[str, str | None] = {}  # entity_id -> area_id
         self.states: dict[str, dict] = {}         # entity_id -> HA state (climate only)
+        self.energy_sensor: dict[str, str] = {}   # climate id -> its kWh sensor (same device)
+        self.power_sensor: dict[str, str] = {}    # climate id -> its W sensor
+        self.sensor_states: dict[str, dict] = {}  # those sensors' states, tracked quietly
+        self._power_published = 0.0               # power changes publish at most every 15 s
+        self._energy: dict = {"fetched_at": 0.0, "series": []}
         self._listeners: list[Emit] = []
         self._task: asyncio.Task | None = None
         self._ws: Any = None
@@ -124,10 +131,29 @@ class HomeAssistant:
         self.areas = {a["area_id"]: {"name": a["name"], "floor": self.floors.get(a.get("floor_id"))}
                       for a in await self._cmd("config/area_registry/list")}
         device_area = {d["id"]: d.get("area_id") for d in await self._cmd("config/device_registry/list")}
+        entities = await self._cmd("config/entity_registry/list")
         self.entity_area = {e["entity_id"]: e.get("area_id") or device_area.get(e.get("device_id"))
-                            for e in await self._cmd("config/entity_registry/list")}
-        self.states = {s["entity_id"]: s for s in await self._cmd("get_states")
-                       if s["entity_id"].split(".")[0] in DOMAINS}
+                            for e in entities}
+        all_states = {s["entity_id"]: s for s in await self._cmd("get_states")}
+        self.states = {eid: s for eid, s in all_states.items() if eid.split(".")[0] in DOMAINS}
+        # each heater's own kWh / W sensors live on the same HA device as its climate entity
+        ent_device = {e["entity_id"]: e.get("device_id") for e in entities}
+        dev_entities: dict[str, list[str]] = {}
+        for eid, dev in ent_device.items():
+            dev_entities.setdefault(dev, []).append(eid)
+        self.energy_sensor, self.power_sensor, self.sensor_states = {}, {}, {}
+        for eid in self.states:
+            for sib in dev_entities.get(ent_device.get(eid), []):
+                s = all_states.get(sib)
+                if not s or not sib.startswith("sensor."):
+                    continue
+                cls = s["attributes"].get("device_class")
+                if cls == "energy":
+                    self.energy_sensor[eid] = sib
+                    self.sensor_states[sib] = s
+                elif cls == "power":
+                    self.power_sensor[eid] = sib
+                    self.sensor_states[sib] = s
         await self._cmd("subscribe_events", event_type="state_changed")
         for ev in REGISTRY_EVENTS:
             await self._cmd("subscribe_events", event_type=ev)
@@ -135,6 +161,13 @@ class HomeAssistant:
     async def _on_event(self, event: dict) -> None:
         if event.get("event_type") == "state_changed":
             eid = event["data"]["entity_id"]
+            if eid in self.sensor_states:  # heater power/energy: track, publish throttled
+                self.sensor_states[eid] = event["data"].get("new_state") or self.sensor_states[eid]
+                if time.monotonic() - self._power_published < 15:
+                    return
+                self._power_published = time.monotonic()
+                await self._publish()
+                return
             if eid.split(".")[0] not in DOMAINS:
                 return
             new = event["data"].get("new_state")
@@ -179,6 +212,13 @@ class HomeAssistant:
     def _area_of(self, entity_id: str) -> dict:
         return self.areas.get(self.entity_area.get(entity_id) or "", {})
 
+    def _power_of(self, entity_id: str) -> float | None:
+        s = self.sensor_states.get(self.power_sensor.get(entity_id, ""))
+        try:
+            return round(float(s["state"]), 1) if s else None
+        except (ValueError, TypeError):
+            return None
+
     def snapshot(self) -> list[dict]:
         out = []
         for eid, s in self.states.items():
@@ -198,8 +238,61 @@ class HomeAssistant:
                 "min_c": a.get("min_temp"),
                 "max_c": a.get("max_temp"),
                 "step": a.get("target_temp_step") or 0.5,
+                "power_w": self._power_of(eid),
             })
         return sorted(out, key=lambda h: ((h["area"] or "~"), h["name"].lower()))
+
+    # ------------------------------------------------------------------ energy history
+    ENERGY_CACHE_SECONDS = 300
+
+    async def energy_history(self) -> list[dict]:
+        """One combined 'Heating' series (all radiators summed) in the same shape as the
+        plug/Tuya histories, from HA's long-term statistics. Cached; keeps the last
+        result when HA is unreachable."""
+        if not self.energy_sensor:
+            return []
+        if time.time() - self._energy["fetched_at"] < self.ENERGY_CACHE_SECONDS:
+            return self._energy["series"]
+        ids = sorted(set(self.energy_sensor.values()))
+        today = dt.datetime.combine(dt.date.today(), dt.time()).astimezone()
+
+        async def stats(start: dt.datetime, period: str) -> dict[str, list[dict]]:
+            return await self._cmd("recorder/statistics_during_period", start_time=start.isoformat(),
+                                   statistic_ids=ids, period=period, types=["change", "state"])
+
+        def ok(row: dict) -> bool:
+            # a meter can't grow by more than its own reading: a larger "change" is the artifact
+            # HA records when a sensor first appears or its counter drops out and recovers
+            change = row.get("change")
+            return bool(change) and (row.get("state") is None or change <= row["state"] + 0.001)
+
+        def merge(per_id: dict, fmt: str, days_ok: dict[str, set] | None = None) -> dict[str, float]:
+            out: dict[str, float] = {}
+            for sid in ids:
+                for row in per_id.get(sid) or []:
+                    t = dt.datetime.fromtimestamp(row["start"] / 1000)
+                    if ok(row) and (days_ok is None or t.strftime("%Y-%m-%d") in days_ok[sid]):
+                        out[t.strftime(fmt)] = out.get(t.strftime(fmt), 0.0) + row["change"]
+            return {k: round(v, 3) for k, v in sorted(out.items())}
+
+        try:
+            per_day = await stats(today - dt.timedelta(days=400), "day")
+            # a day the daily guard rejected is garbage at hourly resolution too (the recovery
+            # spreads over hours that each pass the meter check on their own)
+            days_ok = {sid: {dt.datetime.fromtimestamp(r["start"] / 1000).strftime("%Y-%m-%d")
+                             for r in per_day.get(sid) or [] if ok(r)} for sid in ids}
+            series = [{
+                "id": "ha-heating", "name": "Heating", "kind": "radiator",
+                "hourly": merge(await stats(today - dt.timedelta(days=6), "hour"), "%Y-%m-%dT%H", days_ok),
+                "daily": merge(per_day, "%Y-%m-%d"),
+                "monthly": merge(await stats(today.replace(year=today.year - 2, month=1, day=1), "month"), "%Y-%m"),
+                "power_w": None,
+            }]
+        except Exception as e:  # noqa: BLE001
+            log.warning("Heater energy history failed, using the last one: %s", e)
+            return self._energy["series"]
+        self._energy = {"fetched_at": time.time(), "series": series}
+        return series
 
     def areas_snapshot(self) -> dict:
         """Floors and areas, for debugging and for phase 2 (Tapo room mapping)."""

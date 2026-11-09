@@ -54,11 +54,11 @@
         </div>
         @if (r.target_c != null) {
           <div class="row tset">
-            <ion-button size="small" fill="outline" (click)="live.nudgeRadiator(r, -1)" [disabled]="!r.online || !r.on"
-                        [attr.aria-label]="'Lower target of ' + r.name">−</ion-button>
+            <button class="tbtn" (click)="live.nudgeRadiator(r, -1)" [disabled]="!r.online || !r.on"
+                    [attr.aria-label]="'Lower target of ' + r.name">−</button>
             <span class="tnum tval">{{ fmtTemp(r.target_c) }}</span>
-            <ion-button size="small" fill="outline" (click)="live.nudgeRadiator(r, 1)" [disabled]="!r.online || !r.on"
-                        [attr.aria-label]="'Raise target of ' + r.name">+</ion-button>
+            <button class="tbtn" (click)="live.nudgeRadiator(r, 1)" [disabled]="!r.online || !r.on"
+                    [attr.aria-label]="'Raise target of ' + r.name">+</button>
             <span class="meta grow" style="text-align: right">target</span>
           </div>
         }

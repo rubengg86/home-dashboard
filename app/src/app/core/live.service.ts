@@ -53,6 +53,9 @@ export class LiveService {
     for (const h of this.heaters()) {
       if (h.online) { w += h.on ? h.power_w ?? 0 : 0; any = true; }
     }
+    for (const r of this.radiators()) {
+      if (r.online && r.power_w != null) { w += r.on ? r.power_w : 0; any = true; }
+    }
     return any ? w : null;
   });
 

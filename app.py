@@ -520,7 +520,8 @@ def _buckets(rng: str) -> list[tuple[str, str]]:
 @api.get("/energy")
 async def energy():
     """kWh per device for each chart range. null = no data for that bar (before a device's history starts)."""
-    series = await manager.energy_history() + (tuya.energy_history() if tuya else [])
+    series = await manager.energy_history() + (tuya.energy_history() if tuya else []) \
+        + (await ha.energy_history() if ha else [])
     field = {"24h": "hourly", "7d": "daily", "30d": "daily", "12m": "monthly"}
     ranges = {}
     for rng, src in field.items():

@@ -130,6 +130,7 @@ export interface Radiator {
   min_c: number | null;
   max_c: number | null;
   step: number;
+  power_w: number | null;
 }
 
 export interface Overview {
@@ -148,7 +149,7 @@ export type EnergyRange = '24h' | '7d' | '30d' | '12m';
 export interface EnergySeries {
   id: string;
   name: string;
-  kind: 'plug' | 'heater';
+  kind: 'plug' | 'heater' | 'radiator';
   power_w: number | null;
   since: string | null;
 }

@@ -26,7 +26,11 @@ ion-toggle { --track-background-checked: var(--app-on); }
 .build { margin: 24px 0 8px; text-align: center; font-size: 11px; color: var(--ion-color-medium); opacity: 0.7; }
 
 .tset {
-  margin-top: 10px;
-  ion-button { margin: 0; --padding-start: 14px; --padding-end: 14px; }
+  margin-top: 10px; gap: 8px;
+  // the web dashboard's pill stepper buttons
+  .tbtn { border: 1px solid var(--app-line); background: var(--app-card-2); color: inherit; font: inherit;
+    font-size: 17px; line-height: 1; padding: 7px 16px; border-radius: 999px;
+    &:active { background: var(--app-line); }
+    &:disabled { opacity: .4; } }
   .tval { font-weight: 650; min-width: 56px; text-align: center; font-size: 17px; }
 }
