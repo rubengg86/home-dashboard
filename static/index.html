@@ -735,7 +735,7 @@ function connect() {
     else if (msg.type === "appliances") renderAppliances(msg);
     else if (msg.type === "tuya") renderTuya(msg.devices);
     else if (msg.type === "climate") renderClimate(msg);
-    if (msg.type === "devices" || msg.type === "tuya") renderEnergyNow();
+    if (msg.type === "devices" || msg.type === "tuya" || msg.type === "climate") renderEnergyNow();
   };
   ws.onclose = () => {
     clearInterval(ping);
