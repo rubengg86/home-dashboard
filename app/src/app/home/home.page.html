@@ -36,6 +36,37 @@
     </div>
   }
 
+  <!-- radiators (Home Assistant) -->
+  @if (live.radiators().length) {
+    <div class="section-title">Heating</div>
+    @for (r of live.radiators(); track r.id) {
+      <div class="card" [class.on]="r.on && r.online" [class.offline]="!r.online">
+        <div class="row">
+          <span class="ico"><ion-icon name="flame"></ion-icon></span>
+          <div class="grow">
+            <div class="name">{{ r.name }}</div>
+            <div class="meta">{{ r.area || 'No area' }}{{ r.floor ? ' · ' + r.floor : '' }}</div>
+          </div>
+          <div class="big tnum">{{ r.current_c != null ? fmtTemp(r.current_c) : '–' }}</div>
+          <span class="pill" [class.active]="r.action === 'heating'">{{ radiatorLabel(r) }}</span>
+          <ion-toggle [checked]="r.on" [disabled]="!r.online" (ionChange)="toggleRadiator(r, $event.detail.checked)"
+                      [attr.aria-label]="'Radiator ' + r.name"></ion-toggle>
+        </div>
+        @if (r.target_c != null) {
+          <div class="row tset">
+            <ion-button size="small" fill="outline" (click)="live.nudgeRadiator(r, -1)" [disabled]="!r.online || !r.on"
+                        [attr.aria-label]="'Lower target of ' + r.name">−</ion-button>
+            <span class="tnum tval">{{ fmtTemp(r.target_c) }}</span>
+            <ion-button size="small" fill="outline" (click)="live.nudgeRadiator(r, 1)" [disabled]="!r.online || !r.on"
+                        [attr.aria-label]="'Raise target of ' + r.name">+</ion-button>
+            <span class="meta grow" style="text-align: right">target</span>
+          </div>
+        }
+      </div>
+    }
+  }
+  @if (live.haError()) { <div class="err">Home Assistant: {{ live.haError() }}</div> }
+
   <!-- heater: just on/off here, the full controls live in the Devices tab -->
   @for (h of live.heaters(); track h.id) {
     <div class="card" [class.on]="h.on && h.online" [class.offline]="!h.online">

@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { App } from '@capacitor/app';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
-import { Appliances, Cameras, Climate, DashEvent, Device, Energy, Heater, Overview, Sensor } from './models';
+import { Appliances, Cameras, Climate, DashEvent, Device, Energy, Heater, Overview, Radiator, Sensor } from './models';
 
 /**
  * The app's single source of truth: loads /overview, then keeps it current from the WebSocket
@@ -16,6 +16,8 @@ export class LiveService {
 
   readonly devices = signal<Device[]>([]);
   readonly heaters = signal<Heater[]>([]);
+  readonly radiators = signal<Radiator[]>([]);
+  readonly haError = signal<string | null>(null);
   readonly appliances = signal<Appliances>({ error: null, appliances: [] });
   readonly events = signal<DashEvent[]>([]);
   readonly cameras = signal<Cameras>({ refresh_seconds: 2, live: false, cameras: [] });
@@ -88,6 +90,7 @@ export class LiveService {
       const o = await firstValueFrom(this.http.get<Overview>('/api/v1/overview'));
       this.devices.set(o.devices);
       this.heaters.set(o.heaters);
+      this.radiators.set(this.withHolds(o.climate ?? []));
       this.appliances.set(o.appliances);
       this.events.set(o.events);
       this.cameras.set(o.cameras);
@@ -147,6 +150,7 @@ export class LiveService {
     switch (msg.type) {
       case 'devices': this.devices.set(msg.devices); break;
       case 'tuya': this.heaters.set(msg.devices); break;
+      case 'climate': this.radiators.set(this.withHolds(msg.heaters)); this.haError.set(msg.error); break;
       case 'appliances': this.appliances.set({ error: msg.error, auth: msg.auth, appliances: msg.appliances }); break;
       case 'events': this.events.set(msg.events); break;
       case 'event': this.events.update((e) => [msg.event, ...e].slice(0, 50)); break;
@@ -176,6 +180,38 @@ export class LiveService {
 
   async boost(h: Heater, minutes: number): Promise<void> {
     await firstValueFrom(this.http.post(`/api/v1/tuya/${encodeURIComponent(h.id)}/boost`, { minutes }));
+  }
+
+  async setRadiator(r: Radiator, on: boolean): Promise<void> {
+    this.radiators.update((list) => list.map((x) => (x.id === r.id ? { ...x, on } : x)));
+    try {
+      await firstValueFrom(this.http.post(`/api/v1/climate/${encodeURIComponent(r.id)}/state`, { on }));
+    } catch (e) {
+      this.radiators.update((list) => list.map((x) => (x.id === r.id ? { ...x, on: !on } : x)));
+      throw e;
+    }
+  }
+
+  // Several +/− taps become one request; the chosen target wins over HA pushes until it is sent.
+  private radTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private radHolds = new Map<string, number>();
+
+  nudgeRadiator(r: Radiator, dir: 1 | -1): void {
+    const step = r.step || 0.5, lo = r.min_c ?? 5, hi = r.max_c ?? 30;
+    const value = Math.min(hi, Math.max(lo, (this.radHolds.get(r.id) ?? r.target_c ?? 20) + dir * step));
+    this.radHolds.set(r.id, value);
+    this.radiators.update((list) => list.map((x) => (x.id === r.id ? { ...x, target_c: value } : x)));
+    clearTimeout(this.radTimers.get(r.id));
+    this.radTimers.set(r.id, setTimeout(async () => {
+      try {
+        await firstValueFrom(this.http.post(`/api/v1/climate/${encodeURIComponent(r.id)}/temperature`, { value }));
+      } catch { /* HA's next push shows the real target */ }
+      finally { if (this.radHolds.get(r.id) === value) this.radHolds.delete(r.id); }
+    }, 600));
+  }
+
+  private withHolds(list: Radiator[]): Radiator[] {
+    return list.map((r) => this.radHolds.has(r.id) ? { ...r, target_c: this.radHolds.get(r.id)! } : r);
   }
 
   async allOff(): Promise<number> {

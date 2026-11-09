@@ -115,9 +115,27 @@ export interface Cameras {
   cameras: Camera[];
 }
 
+/** A Home Assistant climate entity (radio TRV radiators). */
+export interface Radiator {
+  id: string;
+  name: string;
+  area: string | null;
+  floor: string | null;
+  online: boolean;
+  on: boolean;
+  mode: string;
+  action: string | null;
+  current_c: number | null;
+  target_c: number | null;
+  min_c: number | null;
+  max_c: number | null;
+  step: number;
+}
+
 export interface Overview {
   devices: Device[];
   heaters: Heater[];
+  climate: Radiator[];
   appliances: Appliances;
   events: DashEvent[];
   cameras: Cameras;

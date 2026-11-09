@@ -12,7 +12,7 @@ import {
 import { AuthService } from '../core/auth.service';
 import { eventLabel, fmtTemp, hhmm, minutesUntil, timeAgo } from '../core/format';
 import { LiveService } from '../core/live.service';
-import { Camera, Heater } from '../core/models';
+import { Camera, Heater, Radiator } from '../core/models';
 import { CameraLiveComponent } from '../shared/camera-live.component';
 import { CameraSnapshotComponent } from '../shared/camera-snapshot.component';
 import { UiService } from '../shared/ui.service';
@@ -62,6 +62,15 @@ export class HomePage {
 
   async toggleHeater(h: Heater, on: boolean): Promise<void> {
     await this.ui.run(() => this.live.setHeater(h, on));
+  }
+
+  radiatorLabel(r: Radiator): string {
+    return !r.online ? 'Offline' : r.action === 'heating' ? 'Heating' : r.on ? 'Idle' : 'Off';
+  }
+
+  async toggleRadiator(r: Radiator, on: boolean): Promise<void> {
+    if (r.on === on) return;  // the toggle fires ionChange for WS-pushed states too
+    await this.ui.run(() => this.live.setRadiator(r, on));
   }
 
   async openCamera(c: Camera): Promise<void> {

@@ -24,3 +24,9 @@ ion-toggle { --track-background-checked: var(--app-on); }
 .ev { display: flex; gap: 10px; align-items: baseline; padding: 10px 0; font-size: 14px;
   & + & { border-top: 1px solid var(--app-line); } }
 .build { margin: 24px 0 8px; text-align: center; font-size: 11px; color: var(--ion-color-medium); opacity: 0.7; }
+
+.tset {
+  margin-top: 10px;
+  ion-button { margin: 0; --padding-start: 14px; --padding-end: 14px; }
+  .tval { font-weight: 650; min-width: 56px; text-align: center; font-size: 17px; }
+}
