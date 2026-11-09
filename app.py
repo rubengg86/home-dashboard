@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from auth import TokenStore, auth_router
 from cameras import CameraManager
 from devices import DeviceManager
+from ha import HomeAssistant
 from smartthings import SmartThings
 from smartthings_auth import OAuth, PatAuth
 from tuya import TuyaManager
@@ -105,6 +106,12 @@ if _tuya_file.exists():
         log.error("Tuya disabled, could not load %s: %s", _tuya_file.name, e)
 else:
     log.info("Tuya disabled: %s not found (create it with: python -m tinytuya wizard)", _tuya_file)
+
+ha = None
+if os.getenv("HA_URL") and os.getenv("HA_TOKEN"):
+    ha = HomeAssistant(os.environ["HA_URL"], os.environ["HA_TOKEN"])
+else:
+    log.info("Home Assistant disabled: set HA_URL and HA_TOKEN (profile -> Security -> long-lived token)")
 
 # ---------------------------------------------------------------- automations
 # actions.json maps source alias -> event name -> action, e.g.
@@ -199,6 +206,9 @@ async def lifespan(_: FastAPI):
         tuya.on_update(broadcast)
         tuya.on_event(publish_event)
         await tuya.start()
+    if ha:
+        ha.on_update(broadcast)
+        await ha.start()
     yield
     await manager.stop()
     await cameras.close()
@@ -206,6 +216,8 @@ async def lifespan(_: FastAPI):
         await smartthings.stop()
     if tuya:
         await tuya.stop()
+    if ha:
+        await ha.stop()
 
 
 async def publish_event(ev: dict) -> None:
@@ -453,6 +465,45 @@ async def all_off():
     return {"ok": True, "switched_off": await manager.all_off()}
 
 
+# ---------------------------------------------------------------- Home Assistant heaters
+def _ha() -> HomeAssistant:
+    if ha is None:
+        raise HTTPException(400, "Home Assistant not configured: set HA_URL and HA_TOKEN")
+    return ha
+
+
+@api.get("/climate")
+async def climate():
+    return {"heaters": ha.snapshot(), "error": ha.error} if ha else {"heaters": [], "error": None}
+
+
+@api.post("/climate/{entity_id}/state")
+async def climate_state(entity_id: str, body: OnBody):
+    try:
+        await _ha().set_state(entity_id, body.on)
+    except Exception as e:  # noqa: BLE001
+        _wrap_errors(e)
+    return {"ok": True}
+
+
+class TempBody(BaseModel):
+    value: float  # target °C; clamped to the entity's min/max
+
+
+@api.post("/climate/{entity_id}/temperature")
+async def climate_temperature(entity_id: str, body: TempBody):
+    try:
+        await _ha().set_temperature(entity_id, body.value)
+    except Exception as e:  # noqa: BLE001
+        _wrap_errors(e)
+    return {"ok": True}
+
+
+@api.get("/ha/areas")
+async def ha_areas():
+    return _ha().areas_snapshot()
+
+
 def _buckets(rng: str) -> list[tuple[str, str]]:
     """(key, ISO start) for each bar of a chart range, oldest first."""
     now = dt.datetime.now()
@@ -611,6 +662,8 @@ async def ws_endpoint(ws: WebSocket):
         await ws.send_json({"type": "appliances", **smartthings.snapshot()})
     if tuya:
         await ws.send_json({"type": "tuya", "devices": tuya.snapshot()})
+    if ha:
+        await ws.send_json({"type": "climate", "heaters": ha.snapshot(), "error": ha.error})
     try:
         while True:
             await ws.receive_text()  # keepalive pings from the client
@@ -629,6 +682,7 @@ async def overview():
     return {
         "devices": manager.snapshot(),
         "heaters": tuya.snapshot() if tuya else [],
+        "climate": ha.snapshot() if ha else [],
         "appliances": smartthings.snapshot() if smartthings else {"error": None, "appliances": []},
         "events": list(manager.events)[:20],
         "cameras": await list_cameras(),

@@ -97,6 +97,10 @@
   .bar > i { display: block; height: 100%; background: var(--on); border-radius: 999px; transition: width .4s; }
   .boosts { display: flex; gap: 6px; flex-wrap: wrap; }
   .boosts .btn { padding: 6px 12px; font-size: 13px; box-shadow: none; }
+  .tset { display: flex; align-items: center; gap: 8px; }
+  .tset .btn { padding: 3px 13px; font-size: 16px; box-shadow: none; line-height: 1.4; }
+  .tset .tval { font-weight: 650; font-variant-numeric: tabular-nums; min-width: 52px; text-align: center; }
+  .tset .tlbl { font-size: 12px; color: var(--muted); margin-left: auto; }
   .connect { display: flex; gap: 8px; flex-wrap: wrap; }
   .connect input { flex: 1; min-width: 200px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
                    background: var(--card-2); color: var(--ink); font: inherit; font-size: 14px; }
@@ -238,6 +242,11 @@
 
 <main>
   <div>
+    <section id="heating" hidden>
+      <h2>Heating <span class="count" id="heatsub"></span></h2>
+      <div class="grid" id="heatcards"></div>
+      <div class="err" id="haerr" hidden style="margin-top:8px"></div>
+    </section>
     <section id="appliances" hidden>
       <h2>Appliances <span class="count" id="appauth"></span></h2>
       <div class="tile" id="stconnect" hidden style="margin-bottom:12px">
@@ -373,6 +382,7 @@ const ICONS = {
   washer: svg('<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="13" r="4.5"/><path d="M8 6.5h.01M11 6.5h2"/>'),
   film: svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>'),
   dryer: svg('<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="13" r="4.5"/><path d="M10.5 11.5c1 1 2 1 3 0M10.5 14.5c1 1 2 1 3 0"/>'),
+  rad: svg('<path d="M4 7h16M4 21h16"/><path d="M6 7v14M10 7v14M14 7v14M18 7v14"/><path d="M7 4c1-.8 1-1.4 2-1.4M12 4c1-.8 1-1.4 2-1.4"/>'),
 };
 function iconFor(d) {
   const m = (d.model || "").toUpperCase();
@@ -632,6 +642,72 @@ $("#tuyacards").addEventListener("click", async (ev) => {
   finally { tuyaBusy = false; }
 });
 
+// ---------------------------------------------------------------- heating: Home Assistant radiators
+let heaters = [], haError = null;
+const heatTimers = {};  // entity id -> debounce timer for target changes
+const heatHold = {};    // entity id -> target the user picked; wins over HA pushes until sent
+
+function renderClimate(msg) {
+  if (msg) {
+    heaters = (msg.heaters || []).map((h) => heatHold[h.id] != null ? { ...h, target_c: heatHold[h.id] } : h);
+    haError = msg.error;
+  }
+  $("#heating").hidden = !heaters.length && !haError;
+  $("#haerr").hidden = !haError;
+  $("#haerr").textContent = haError ? `Home Assistant: ${haError}` : "";
+  const heating = heaters.filter((h) => h.action === "heating").length;
+  $("#heatsub").textContent = heating ? `${heating} heating` : "";
+  $("#heatcards").innerHTML = heaters.map((h) => {
+    const state = !h.online ? "Offline" : h.action === "heating" ? "Heating" : h.on ? "Idle" : "Off";
+    return `
+    <div class="tile appl ${h.action === "heating" ? "running" : ""} ${h.on ? "on" : ""} ${h.online ? "" : "offline"}" data-id="${esc(h.id)}">
+      <div class="top">
+        <span class="ico">${ICONS.rad}</span>
+        <div style="display:flex;gap:10px;align-items:center">
+          <span class="state">${state}</span>
+          <button class="switch ${h.on ? "on" : ""}" data-ha="toggle" aria-label="Toggle ${esc(h.name)}" ${h.online ? "" : "disabled"}></button>
+        </div>
+      </div>
+      ${h.current_c != null ? `<div class="big" style="font-variant-numeric:tabular-nums">${h.current_c.toFixed(1)}°</div>` : ""}
+      <div style="min-width:0">
+        <div class="name" title="${esc(h.name)}">${esc(h.name)}</div>
+        <div class="meta">${esc(h.area || "No area")}${h.floor ? ` · ${esc(h.floor)}` : ""}</div>
+      </div>
+      ${h.target_c != null ? `<div class="tset">
+        <button class="btn" data-ha="dec" ${h.online && h.on ? "" : "disabled"} aria-label="Lower target of ${esc(h.name)}">−</button>
+        <span class="tval">${h.target_c.toFixed(1)}°</span>
+        <button class="btn" data-ha="inc" ${h.online && h.on ? "" : "disabled"} aria-label="Raise target of ${esc(h.name)}">+</button>
+        <span class="tlbl">target</span>
+      </div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+$("#heatcards").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("[data-ha]");
+  if (!btn || btn.disabled) return;
+  const id = btn.closest(".tile").dataset.id;
+  const h = heaters.find((x) => x.id === id);
+  if (!h) return;
+  if (btn.dataset.ha === "toggle") {
+    h.on = !h.on; renderClimate();  // optimistic; HA pushes the real state back
+    try { await api(`/api/climate/${encodeURIComponent(id)}/state`, {}); }
+    catch (e) { h.on = !h.on; renderClimate(); toast(e.message); }
+    return;
+  }
+  const step = h.step || 0.5, lo = h.min_c ?? 5, hi = h.max_c ?? 30;
+  h.target_c = Math.min(hi, Math.max(lo, (h.target_c ?? 20) + (btn.dataset.ha === "inc" ? step : -step)));
+  heatHold[id] = h.target_c;
+  renderClimate();
+  clearTimeout(heatTimers[id]);  // several taps become one request
+  heatTimers[id] = setTimeout(async () => {
+    const value = heatHold[id];
+    try { await api(`/api/climate/${encodeURIComponent(id)}/temperature`, { value }); }
+    catch (e) { toast(e.message); }
+    finally { if (heatHold[id] === value) delete heatHold[id]; }
+  }, 600);
+});
+
 // ---------------------------------------------------------------- header actions
 $("#alloff").onclick = async () => {
   try { const r = await api("/api/scenes/all-off"); toast(`Switched off ${r.switched_off} device(s)`); }
@@ -658,6 +734,7 @@ function connect() {
     else if (msg.type === "event") onEvent(msg.event);
     else if (msg.type === "appliances") renderAppliances(msg);
     else if (msg.type === "tuya") renderTuya(msg.devices);
+    else if (msg.type === "climate") renderClimate(msg);
     if (msg.type === "devices" || msg.type === "tuya") renderEnergyNow();
   };
   ws.onclose = () => {
