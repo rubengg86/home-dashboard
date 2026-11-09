@@ -99,6 +99,7 @@ CORS allows the Capacitor/Ionic origins (`capacitor://localhost`, `http://localh
 - **Auth errors**: use your Tapo app email and password. Quote any special characters in `.env`.
 - **Empty S200B cards / no presses**: run `python discover.py` and check whether the button lists `trigger logs`. If it doesn't, your python-kasa version may name the module differently.
 - **Pin versions**: firmware or library updates can break the local protocol. Test before you upgrade.
+- **`IoT Core service subscription has expired`** (heater energy import stops, log says `Energy history: Tuya cloud: statistics: IoT Core service subscription has expired`): Tuya's free cloud trial lapses roughly every **6 months** (last renewed 2026-11-09, so expect it around **May 2027**). Renew it for free: log in at <https://platform.tuya.com> with the developer account from the tinytuya wizard → **Cloud → Cloud Services → IoT Core → My Subscriptions** → **Extend Trial Period** and fill the short form (personal/testing). No config changes needed; the dashboard retries hourly and backfills the last 7 days from the device log, so renew within a week of it breaking and no chart data is lost. Heater control, boost and live power are local and keep working meanwhile.
 
 ## SmartThings auto-renewing login (OAuth)
 
