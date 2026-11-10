@@ -702,24 +702,25 @@ function renderClimate(msg) {
   $("#heatsub").textContent = heating ? `${heating} heating` : "";
   $("#heatcards").innerHTML = heaters.map((h) => {
     const state = !h.online ? "Offline" : h.action === "heating" ? "Heating" : h.on ? "Idle" : "Off";
+    const label = h.area || h.name;
     return `
     <div class="tile appl ${h.action === "heating" ? "running" : ""} ${h.on ? "on" : ""} ${h.online ? "" : "offline"}" data-id="${esc(h.id)}">
       <div class="top">
         <span class="ico">${ICONS.rad}</span>
         <div style="display:flex;gap:10px;align-items:center">
           <span class="state">${state}</span>
-          <button class="switch ${h.on ? "on" : ""}" data-ha="toggle" aria-label="Toggle ${esc(h.name)}" ${h.online ? "" : "disabled"}></button>
+          <button class="switch ${h.on ? "on" : ""}" data-ha="toggle" aria-label="Toggle ${esc(label)}" ${h.online ? "" : "disabled"}></button>
         </div>
       </div>
       ${h.current_c != null ? `<div class="big" style="font-variant-numeric:tabular-nums">${h.current_c.toFixed(1)}°</div>` : ""}
       <div style="min-width:0">
-        <div class="name" title="${esc(h.name)}">${esc(h.name)}</div>
-        <div class="meta">${esc(h.area || "No area")}${h.floor ? ` · ${esc(h.floor)}` : ""}</div>
+        <div class="name" title="${esc(h.name)}">${esc(label)}</div>
+        <div class="meta">${h.floor ? `${esc(h.floor)} · ` : ""}${esc(h.name)}</div>
       </div>
       ${h.target_c != null ? `<div class="tset">
-        <button class="btn" data-ha="dec" ${h.online && h.on ? "" : "disabled"} aria-label="Lower target of ${esc(h.name)}">−</button>
+        <button class="btn" data-ha="dec" ${h.online && h.on ? "" : "disabled"} aria-label="Lower target of ${esc(label)}">−</button>
         <span class="tval">${h.target_c.toFixed(1)}°</span>
-        <button class="btn" data-ha="inc" ${h.online && h.on ? "" : "disabled"} aria-label="Raise target of ${esc(h.name)}">+</button>
+        <button class="btn" data-ha="inc" ${h.online && h.on ? "" : "disabled"} aria-label="Raise target of ${esc(label)}">+</button>
         <span class="tlbl">target</span>
       </div>` : ""}
     </div>`;

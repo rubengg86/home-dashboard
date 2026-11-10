@@ -44,21 +44,21 @@
         <div class="row">
           <span class="ico"><ion-icon name="flame"></ion-icon></span>
           <div class="grow">
-            <div class="name">{{ r.name }}</div>
-            <div class="meta">{{ r.area || 'No area' }}{{ r.floor ? ' · ' + r.floor : '' }}</div>
+            <div class="name">{{ r.area || r.name }}</div>
+            <div class="meta">{{ r.floor ? r.floor + ' · ' : '' }}{{ r.name }}</div>
           </div>
           <div class="big tnum">{{ r.current_c != null ? fmtTemp(r.current_c) : '–' }}</div>
           <span class="pill" [class.active]="r.action === 'heating'">{{ radiatorLabel(r) }}</span>
           <ion-toggle [checked]="r.on" [disabled]="!r.online" (ionChange)="toggleRadiator(r, $event.detail.checked)"
-                      [attr.aria-label]="'Radiator ' + r.name"></ion-toggle>
+                      [attr.aria-label]="'Radiator ' + (r.area || r.name)"></ion-toggle>
         </div>
         @if (r.target_c != null) {
           <div class="row tset">
             <button class="tbtn" (click)="live.nudgeRadiator(r, -1)" [disabled]="!r.online || !r.on"
-                    [attr.aria-label]="'Lower target of ' + r.name">−</button>
+                    [attr.aria-label]="'Lower target of ' + (r.area || r.name)">−</button>
             <span class="tnum tval">{{ fmtTemp(r.target_c) }}</span>
             <button class="tbtn" (click)="live.nudgeRadiator(r, 1)" [disabled]="!r.online || !r.on"
-                    [attr.aria-label]="'Raise target of ' + r.name">+</button>
+                    [attr.aria-label]="'Raise target of ' + (r.area || r.name)">+</button>
             <span class="meta grow" style="text-align: right">target</span>
           </div>
         }
