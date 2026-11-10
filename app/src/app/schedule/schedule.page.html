@@ -1,0 +1,68 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-title>Heating schedule</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="save()" [disabled]="!dirty() || busy()" [strong]="true">Save</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
+
+  @if (error()) { <div class="card"><div class="err">{{ error() }}</div></div> }
+
+  @if (doc(); as d) {
+    <div class="card">
+      <div class="row">
+        <div class="grow">
+          <div class="name">Apply automatically</div>
+          <div class="meta">Targets are sent when a block starts; manual changes hold until the next one</div>
+        </div>
+        <ion-toggle [checked]="d.enabled" (ionChange)="setEnabled($event.detail.checked)" aria-label="Apply the schedule"></ion-toggle>
+      </div>
+      @if (d.error) { <div class="err">{{ d.error }}</div> }
+    </div>
+
+    @for (p of d.programs; track p.name) {
+      <div class="section-title">{{ p.name }} <span class="days">{{ daysLabel(p.days) }}</span></div>
+      @for (b of p.blocks; track b) {
+        <div class="card block">
+          <div class="row head">
+            <input class="time" type="time" [value]="b.time" (change)="setTime(p, b, $any($event.target).value)"
+                   [attr.aria-label]="'Start of the ' + b.time + ' block'">
+            <span class="meta">until {{ endOf(p, $index) }}</span>
+            <span class="grow"></span>
+            @if (p.blocks.length > 1) {
+              <button class="del" (click)="removeBlock(p, $index)" [attr.aria-label]="'Remove the ' + b.time + ' block'">
+                <ion-icon name="trash-outline"></ion-icon>
+              </button>
+            }
+          </div>
+          @for (id of radiatorIds(b); track id) {
+            <div class="row rrow">
+              <div class="grow name rname">{{ radiatorLabel(id) }}</div>
+              <button class="tbtn" (click)="nudge(b, id, -1)" [attr.aria-label]="'Lower ' + radiatorLabel(id)">−</button>
+              <button class="tval tnum" (click)="clearTarget(b, id)" [disabled]="b.targets[id] == null"
+                      [attr.aria-label]="'Stop scheduling ' + radiatorLabel(id) + ' in this block'">
+                {{ b.targets[id] != null ? (b.targets[id] | number: '1.1-1') + '°' : '–' }}
+              </button>
+              <button class="tbtn" (click)="nudge(b, id, 1)" [attr.aria-label]="'Raise ' + radiatorLabel(id)">+</button>
+            </div>
+          }
+        </div>
+      }
+      <button class="addbtn" (click)="addBlock(p)"><ion-icon name="add-outline"></ion-icon> Add block</button>
+    }
+
+    @if (!d.programs.length) {
+      <div class="card">
+        <div class="name">No schedule yet</div>
+        <div class="meta" style="margin: 6px 0 14px">Start with a weekday + weekend template and adjust the blocks.</div>
+        <ion-button size="small" (click)="startTemplate()">Create template</ion-button>
+      </div>
+    }
+
+    @if (dirty()) { <div class="meta unsaved">Unsaved changes — press Save to apply.</div> }
+  }
+</ion-content>

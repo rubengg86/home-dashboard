@@ -1,0 +1,28 @@
+{
+ "enabled": true,
+ "programs": [
+  {
+   "name": "Weekdays",
+   "days": [0, 1, 2, 3, 4],
+   "blocks": [
+    {"time": "00:00", "targets": {"climate.heater_5036302d": 15.5, "climate.heater_5135392d": 15.0, "climate.heater_028010005135392d": 16.5}},
+    {"time": "07:00", "targets": {"climate.heater_5036302d": 19.0, "climate.heater_5135392d": 16.0, "climate.heater_028010005135392d": 16.0}},
+    {"time": "09:00", "targets": {"climate.heater_5036302d": 17.0, "climate.heater_5135392d": 19.0, "climate.heater_028010005135392d": 15.5}},
+    {"time": "16:00", "targets": {"climate.heater_5036302d": 19.0, "climate.heater_5135392d": 19.0, "climate.heater_028010005135392d": 15.5}},
+    {"time": "17:30", "targets": {"climate.heater_5036302d": 19.0, "climate.heater_5135392d": 16.0, "climate.heater_028010005135392d": 15.5}},
+    {"time": "21:30", "targets": {"climate.heater_5036302d": 16.5, "climate.heater_5135392d": 15.0, "climate.heater_028010005135392d": 18.0}}
+   ]
+  },
+  {
+   "name": "Weekend",
+   "days": [5, 6],
+   "blocks": [
+    {"time": "00:00", "targets": {"climate.heater_5036302d": 15.5, "climate.heater_5135392d": 15.0, "climate.heater_028010005135392d": 16.5}},
+    {"time": "07:00", "targets": {"climate.heater_5036302d": 19.0, "climate.heater_5135392d": 16.0, "climate.heater_028010005135392d": 16.0}},
+    {"time": "10:00", "targets": {"climate.heater_5036302d": 19.0, "climate.heater_5135392d": 15.0, "climate.heater_028010005135392d": 15.5}},
+    {"time": "17:00", "targets": {"climate.heater_5036302d": 19.0, "climate.heater_5135392d": 15.0, "climate.heater_028010005135392d": 16.0}},
+    {"time": "21:30", "targets": {"climate.heater_5036302d": 16.0, "climate.heater_5135392d": 15.0, "climate.heater_028010005135392d": 18.0}}
+   ]
+  }
+ ]
+}

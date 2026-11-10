@@ -28,6 +28,7 @@ from auth import TokenStore, auth_router
 from cameras import CameraManager
 from devices import DeviceManager
 from ha import HomeAssistant
+from heating_schedule import HeatingSchedule
 from smartthings import SmartThings
 from smartthings_auth import OAuth, PatAuth
 from tuya import TuyaManager
@@ -108,8 +109,10 @@ else:
     log.info("Tuya disabled: %s not found (create it with: python -m tinytuya wizard)", _tuya_file)
 
 ha = None
+schedule = None
 if os.getenv("HA_URL") and os.getenv("HA_TOKEN"):
     ha = HomeAssistant(os.environ["HA_URL"], os.environ["HA_TOKEN"])
+    schedule = HeatingSchedule(ha, DATA / "heating_schedule.json")
 else:
     log.info("Home Assistant disabled: set HA_URL and HA_TOKEN (profile -> Security -> long-lived token)")
 
@@ -209,6 +212,8 @@ async def lifespan(_: FastAPI):
     if ha:
         ha.on_update(broadcast)
         await ha.start()
+    if schedule:
+        await schedule.start()
     yield
     await manager.stop()
     await cameras.close()
@@ -216,6 +221,8 @@ async def lifespan(_: FastAPI):
         await smartthings.stop()
     if tuya:
         await tuya.stop()
+    if schedule:
+        await schedule.stop()
     if ha:
         await ha.stop()
 
@@ -502,6 +509,23 @@ async def climate_temperature(entity_id: str, body: TempBody):
 @api.get("/ha/areas")
 async def ha_areas():
     return _ha().areas_snapshot()
+
+
+@api.get("/heating/schedule")
+async def get_schedule():
+    if schedule is None:
+        raise HTTPException(400, "Home Assistant not configured: set HA_URL and HA_TOKEN")
+    return schedule.snapshot()
+
+
+@api.put("/heating/schedule")
+async def put_schedule(body: dict):
+    if schedule is None:
+        raise HTTPException(400, "Home Assistant not configured: set HA_URL and HA_TOKEN")
+    try:
+        return await schedule.save(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 def _buckets(rng: str) -> list[tuple[str, str]]:

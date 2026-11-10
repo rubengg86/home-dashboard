@@ -133,6 +133,23 @@ export interface Radiator {
   power_w: number | null;
 }
 
+export interface ScheduleBlock {
+  time: string;  // "HH:MM"; the block runs until the next block starts
+  targets: Record<string, number>;  // climate entity id -> target °C
+}
+
+export interface ScheduleProgram {
+  name: string;
+  days: number[];  // 0 = Monday ... 6 = Sunday
+  blocks: ScheduleBlock[];
+}
+
+export interface HeatingScheduleDoc {
+  enabled: boolean;
+  programs: ScheduleProgram[];
+  error?: string | null;
+}
+
 export interface Overview {
   devices: Device[];
   heaters: Heater[];

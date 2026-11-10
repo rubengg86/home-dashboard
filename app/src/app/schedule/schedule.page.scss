@@ -1,0 +1,25 @@
+ion-title { font-size: 22px; font-weight: 700; padding-top: 6px; }
+
+.section-title .days { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--app-muted); margin-left: 8px; }
+
+.block { margin-bottom: 12px; }
+.head { margin-bottom: 4px; }
+.time { font: inherit; font-size: 17px; font-weight: 650; color: inherit; background: var(--app-card-2);
+  border: 1px solid var(--app-line); border-radius: 10px; padding: 5px 10px; }
+.del { background: none; border: 0; color: var(--app-muted); font-size: 19px; padding: 6px; display: grid; }
+
+.rrow { padding: 8px 0 0; }
+.rname { font-weight: 500; font-size: 15px; }
+
+// the web dashboard's pill stepper buttons
+.tbtn { border: 1px solid var(--app-line); background: var(--app-card-2); color: inherit; font: inherit;
+  font-size: 17px; line-height: 1; padding: 7px 16px; border-radius: 999px;
+  &:active { background: var(--app-line); } }
+.tval { background: none; border: 0; color: inherit; font: inherit; font-weight: 650; min-width: 56px;
+  text-align: center; font-size: 17px; padding: 0;
+  &:disabled { opacity: 1; } }
+
+.addbtn { display: flex; align-items: center; gap: 6px; margin: 0 auto 20px; background: none; border: 0;
+  color: var(--app-muted); font: inherit; font-size: 14px; font-weight: 600; padding: 8px 14px; }
+
+.unsaved { text-align: center; margin: 8px 0 16px; }
