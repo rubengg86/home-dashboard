@@ -138,7 +138,11 @@
   .cam .recbtn:hover { background: #000c; }
   .cam .recbtn svg { width: 18px; height: 18px; }
   #recs { position: fixed; inset: 0; background: #0d0d0c; display: grid; place-items: center; z-index: 11; padding: 16px; }
-  .rbox { width: min(1280px, 100%); height: min(860px, 100%); display: flex; flex-direction: column; gap: 10px; color: #fff; }
+  /* a definite height: with a percentage, the overlay's grid row sizes itself to the full clip
+     list and the box ends up centered in a row taller than the screen, i.e. pushed off-view */
+  .rbox { width: min(1280px, 100%); height: min(860px, calc(100vh - 32px)); display: flex;
+          flex-direction: column; gap: 10px; color: #fff; }
+  @supports (height: 100dvh) { .rbox { height: min(860px, calc(100dvh - 32px)); } }
   .rbody { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
   @media (max-width: 760px) { .rbody { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
                               .rdays { max-height: 150px; } }
