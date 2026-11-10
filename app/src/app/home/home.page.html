@@ -66,6 +66,7 @@
     }
   }
   @if (live.haError()) { <div class="err">Home Assistant: {{ live.haError() }}</div> }
+  @if (live.haWarning()) { <div class="err">{{ live.haWarning() }}</div> }
 
   <!-- heater: just on/off here, the full controls live in the Devices tab -->
   @for (h of live.heaters(); track h.id) {

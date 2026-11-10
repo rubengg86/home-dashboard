@@ -18,6 +18,7 @@ export class LiveService {
   readonly heaters = signal<Heater[]>([]);
   readonly radiators = signal<Radiator[]>([]);
   readonly haError = signal<string | null>(null);
+  readonly haWarning = signal<string | null>(null);
   readonly appliances = signal<Appliances>({ error: null, appliances: [] });
   readonly events = signal<DashEvent[]>([]);
   readonly cameras = signal<Cameras>({ refresh_seconds: 2, live: false, cameras: [] });
@@ -153,7 +154,11 @@ export class LiveService {
     switch (msg.type) {
       case 'devices': this.devices.set(msg.devices); break;
       case 'tuya': this.heaters.set(msg.devices); break;
-      case 'climate': this.radiators.set(this.withHolds(msg.heaters)); this.haError.set(msg.error); break;
+      case 'climate':
+        this.radiators.set(this.withHolds(msg.heaters));
+        this.haError.set(msg.error);
+        this.haWarning.set(msg.warning ?? null);
+        break;
       case 'appliances': this.appliances.set({ error: msg.error, auth: msg.auth, appliances: msg.appliances }); break;
       case 'events': this.events.set(msg.events); break;
       case 'event': this.events.update((e) => [msg.event, ...e].slice(0, 50)); break;

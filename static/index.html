@@ -686,7 +686,7 @@ $("#tuyacards").addEventListener("click", async (ev) => {
 });
 
 // ---------------------------------------------------------------- heating: Home Assistant radiators
-let heaters = [], haError = null;
+let heaters = [], haError = null, haWarning = null;
 const heatTimers = {};  // entity id -> debounce timer for target changes
 const heatHold = {};    // entity id -> target the user picked; wins over HA pushes until sent
 
@@ -694,10 +694,11 @@ function renderClimate(msg) {
   if (msg) {
     heaters = (msg.heaters || []).map((h) => heatHold[h.id] != null ? { ...h, target_c: heatHold[h.id] } : h);
     haError = msg.error;
+    haWarning = msg.warning;
   }
   $("#heating").hidden = !heaters.length && !haError;
-  $("#haerr").hidden = !haError;
-  $("#haerr").textContent = haError ? `Home Assistant: ${haError}` : "";
+  $("#haerr").hidden = !haError && !haWarning;
+  $("#haerr").textContent = haError ? `Home Assistant: ${haError}` : haWarning || "";
   const heating = heaters.filter((h) => h.action === "heating").length;
   $("#heatsub").textContent = heating ? `${heating} heating` : "";
   $("#heatcards").innerHTML = heaters.map((h) => {

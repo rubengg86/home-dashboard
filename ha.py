@@ -39,6 +39,8 @@ class HomeAssistant:
         self.energy_sensor: dict[str, str] = {}   # climate id -> its kWh sensor (same device)
         self.power_sensor: dict[str, str] = {}    # climate id -> its W sensor
         self.sensor_states: dict[str, dict] = {}  # those sensors' states, tracked quietly
+        self.gateway_sensor: dict[str, tuple[str, ...]] = {}  # climate id -> its hub chain's connectivity sensors
+        self.conn_states: dict[str, dict] = {}    # those connectivity sensors' states
         self._power_published = 0.0               # power changes publish at most every 15 s
         self._energy: dict = {"fetched_at": 0.0, "series": []}
         self._listeners: list[Emit] = []
@@ -130,7 +132,9 @@ class HomeAssistant:
             self.floors = {}
         self.areas = {a["area_id"]: {"name": a["name"], "floor": self.floors.get(a.get("floor_id"))}
                       for a in await self._cmd("config/area_registry/list")}
-        device_area = {d["id"]: d.get("area_id") for d in await self._cmd("config/device_registry/list")}
+        devices = await self._cmd("config/device_registry/list")
+        device_area = {d["id"]: d.get("area_id") for d in devices}
+        device_via = {d["id"]: d.get("via_device_id") for d in devices}
         entities = await self._cmd("config/entity_registry/list")
         self.entity_area = {e["entity_id"]: e.get("area_id") or device_area.get(e.get("device_id"))
                             for e in entities}
@@ -154,6 +158,20 @@ class HomeAssistant:
                 elif cls == "power":
                     self.power_sensor[eid] = sib
                     self.sensor_states[sib] = s
+        # a heater reached through a hub (via_device chain) is only as online as the hub:
+        # watch the chain's connectivity binary_sensors (e.g. the radio gateway's "online")
+        self.gateway_sensor, self.conn_states = {}, {}
+        for eid in self.states:
+            conn, dev, seen = [], ent_device.get(eid), set()
+            while dev and dev not in seen:
+                seen.add(dev)
+                for sib in dev_entities.get(dev, []):
+                    s = all_states.get(sib)
+                    if sib.startswith("binary_sensor.") and s and s["attributes"].get("device_class") == "connectivity":
+                        conn.append(sib)
+                        self.conn_states[sib] = s
+                dev = device_via.get(dev)
+            self.gateway_sensor[eid] = tuple(conn)
         await self._cmd("subscribe_events", event_type="state_changed")
         for ev in REGISTRY_EVENTS:
             await self._cmd("subscribe_events", event_type=ev)
@@ -161,6 +179,10 @@ class HomeAssistant:
     async def _on_event(self, event: dict) -> None:
         if event.get("event_type") == "state_changed":
             eid = event["data"]["entity_id"]
+            if eid in self.conn_states:  # gateway connectivity: publish right away
+                self.conn_states[eid] = event["data"].get("new_state") or self.conn_states[eid]
+                await self._publish()
+                return
             if eid in self.sensor_states:  # heater power/energy: track, publish throttled
                 self.sensor_states[eid] = event["data"].get("new_state") or self.sensor_states[eid]
                 if time.monotonic() - self._power_published < 15:
@@ -212,6 +234,13 @@ class HomeAssistant:
     def _area_of(self, entity_id: str) -> dict:
         return self.areas.get(self.entity_area.get(entity_id) or "", {})
 
+    def _gateway_down(self, entity_id: str) -> bool:
+        return any((self.conn_states.get(sid) or {}).get("state") == "off"
+                   for sid in self.gateway_sensor.get(entity_id, ()))
+
+    def warning(self) -> str | None:
+        return "Heater gateway offline" if any(map(self._gateway_down, self.states)) else None
+
     def _power_of(self, entity_id: str) -> float | None:
         s = self.sensor_states.get(self.power_sensor.get(entity_id, ""))
         try:
@@ -229,7 +258,7 @@ class HomeAssistant:
                 "name": a.get("friendly_name") or eid,
                 "area": area.get("name"),
                 "floor": area.get("floor"),
-                "online": s["state"] not in ("unavailable", "unknown"),
+                "online": s["state"] not in ("unavailable", "unknown") and not self._gateway_down(eid),
                 "on": s["state"] not in ("off", "unavailable", "unknown"),
                 "mode": s["state"],                        # off / heat / auto / ...
                 "action": a.get("hvac_action"),            # heating / idle / off / None
@@ -301,7 +330,7 @@ class HomeAssistant:
                 "error": self.error}
 
     async def _publish(self) -> None:
-        msg = {"type": "climate", "heaters": self.snapshot(), "error": self.error}
+        msg = {"type": "climate", "heaters": self.snapshot(), "error": self.error, "warning": self.warning()}
         for fn in list(self._listeners):
             try:
                 await fn(msg)

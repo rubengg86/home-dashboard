@@ -481,7 +481,8 @@ def _ha() -> HomeAssistant:
 
 @api.get("/climate")
 async def climate():
-    return {"heaters": ha.snapshot(), "error": ha.error} if ha else {"heaters": [], "error": None}
+    return ({"heaters": ha.snapshot(), "error": ha.error, "warning": ha.warning()}
+            if ha else {"heaters": [], "error": None, "warning": None})
 
 
 @api.post("/climate/{entity_id}/state")
@@ -688,7 +689,8 @@ async def ws_endpoint(ws: WebSocket):
     if tuya:
         await ws.send_json({"type": "tuya", "devices": tuya.snapshot()})
     if ha:
-        await ws.send_json({"type": "climate", "heaters": ha.snapshot(), "error": ha.error})
+        await ws.send_json({"type": "climate", "heaters": ha.snapshot(), "error": ha.error,
+                            "warning": ha.warning()})
     try:
         while True:
             await ws.receive_text()  # keepalive pings from the client
