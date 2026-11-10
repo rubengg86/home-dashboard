@@ -120,8 +120,9 @@
   .cam .msg { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa; font-size: 13px; padding: 12px; text-align: center; }
 
   /* ---------- live viewer */
-  #viewer { position: fixed; inset: 0; background: #000e; display: grid; place-items: center; z-index: 10; padding: 16px; }
-  .vbox { width: min(1280px, 100%); display: flex; flex-direction: column; gap: 10px; }
+  #viewer { position: fixed; inset: 0; background: #000e; display: grid; place-items: center; z-index: 10; padding: 16px; overflow: auto; }
+  /* never taller than the screen: the stage caps itself and the video letterboxes inside */
+  .vbox { width: min(1280px, 100%, calc((100vh - 150px) * 16 / 9)); display: flex; flex-direction: column; gap: 10px; }
   .vbar { display: flex; align-items: center; gap: 10px; color: #fff; flex-wrap: wrap; }
   .vbtn { background: #fff2; color: #fff; border: 0; border-radius: 8px; padding: 6px 11px; font-size: 13px; cursor: pointer; }
   .vbtn:hover { background: #fff3; }
@@ -149,8 +150,9 @@
   .rhour:hover { background: #ffffff26; }
   .rhour.active { background: #fff; color: #000; }
   .rmain { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
-  .rmain .vstage { flex: none; }
-  .rmain video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; }
+  /* cap the player so the clip list below always stays reachable on small screens */
+  .rmain .vstage { flex: none; max-height: 42vh; }
+  .rmain video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; object-fit: contain; }
   .rnow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #ddd; }
   .rnow label { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: auto; }
   .rclips { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -213,6 +215,28 @@
   .etable th, .etable td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   .etable th:first-child, .etable td:first-child { text-align: left; }
   .etable th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+  /* ---------- heating schedule editor */
+  #sched { border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); background: var(--card); color: var(--ink);
+           padding: 0; width: min(560px, calc(100vw - 32px)); max-height: 86vh; display: none;
+           flex-direction: column; box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+  #sched[open] { display: flex; animation: pop .16s ease-out; }
+  #sched::backdrop { background: rgba(20, 20, 18, .45); }
+  #sched .shd { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  #sched h3 { margin: 0; font-size: 17px; font-weight: 650; flex: 1; }
+  #sched .sbody { overflow: auto; padding: 2px 20px 12px; }
+  #sched h4 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+              color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+  #sched .sfoot { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
+  .sblock { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .sblock .tset { margin: 6px 0; }
+  .sblock .btn { background: var(--card); }
+  .sblock input[type=time] { font: inherit; font-weight: 650; color: inherit; background: var(--card);
+                             border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+  .sname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sdel { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 4px 6px; }
+  .stval { background: none; border: 0; color: inherit; cursor: pointer; padding: 0; }
+  .stval:disabled { cursor: default; }
+
   /* ---------- confirm dialog */
   #confirm { border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); background: var(--card); color: var(--ink);
              padding: 0; width: min(360px, calc(100vw - 32px)); box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
@@ -243,7 +267,8 @@
 <main>
   <div>
     <section id="heating" hidden>
-      <h2>Heating <span class="count" id="heatsub"></span></h2>
+      <h2>Heating <span class="count" id="heatsub"></span>
+        <button class="btn" id="schedbtn" style="margin-left:auto;text-transform:none;letter-spacing:0">Schedule</button></h2>
       <div class="grid" id="heatcards"></div>
       <div class="err" id="haerr" hidden style="margin-top:8px"></div>
     </section>
@@ -297,6 +322,7 @@
       <span style="flex:1"></span>
       <button class="vbtn" data-q="hd">HD</button>
       <button class="vbtn" data-q="sd">SD</button>
+      <button class="vbtn" id="vrecs" hidden>Recordings</button>
       <button class="vbtn" id="vclose" aria-label="Close">✕</button>
     </div>
     <div class="vstage">
@@ -333,6 +359,19 @@
     </div>
   </div>
 </div>
+<dialog id="sched" aria-labelledby="schedtitle">
+  <div class="shd">
+    <h3 id="schedtitle">Heating schedule</h3>
+    <span class="meta">Apply automatically</span>
+    <button class="switch" id="schedenable" aria-label="Apply the schedule automatically"></button>
+    <button class="btn" id="schedclose" aria-label="Close">✕</button>
+  </div>
+  <div class="sbody" id="schedbody"></div>
+  <div class="sfoot">
+    <span class="meta" id="schednote" style="flex:1;align-self:center"></span>
+    <button class="btn primary" id="schedsave">Save</button>
+  </div>
+</dialog>
 <div id="toast" role="status"></div>
 <dialog id="confirm" aria-labelledby="confirmtitle" aria-describedby="confirmtext">
   <form method="dialog">
@@ -708,6 +747,110 @@ $("#heatcards").addEventListener("click", async (ev) => {
   }, 600);
 });
 
+// ---------------------------------------------------------------- heating schedule editor
+const SDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+let sched = null, schedDirty = false;
+const schedName = (id) => { const r = heaters.find((h) => h.id === id); return r ? (r.area || r.name) : id; };
+const schedIds = (b) => { const ids = heaters.map((h) => h.id);
+                          return [...ids, ...Object.keys(b.targets).filter((id) => !ids.includes(id))]; };
+
+$("#schedbtn").onclick = async () => {
+  try { sched = await getJSON("/api/heating/schedule"); }
+  catch (e) { return toast(`Schedule: ${e.message}`); }
+  schedDirty = false;
+  renderSchedule();
+  $("#sched").showModal();
+};
+
+function renderSchedule() {
+  $("#schedsave").disabled = !schedDirty;
+  $("#schednote").textContent = schedDirty ? "Unsaved changes" : sched.error ? `Schedule: ${sched.error}` : "";
+  $("#schedenable").classList.toggle("on", sched.enabled);
+  const end = (p, i) => p.blocks[(i + 1) % p.blocks.length].time;
+  $("#schedbody").innerHTML = sched.programs.map((p, pi) => `
+    <h4>${esc(p.name)} <span class="count">${p.days.map((d) => SDAYS[d] ?? d).join(" · ")}</span></h4>
+    ${p.blocks.map((b, bi) => `
+    <div class="sblock" data-p="${pi}" data-b="${bi}">
+      <div class="tset">
+        <input type="time" value="${esc(b.time)}" data-s="time" aria-label="Start of the block">
+        <span class="meta">until ${esc(end(p, bi))}</span>
+        <span style="flex:1"></span>
+        ${p.blocks.length > 1 ? `<button class="sdel" data-s="del" aria-label="Remove this block">✕</button>` : ""}
+      </div>
+      ${schedIds(b).map((id) => `
+      <div class="tset">
+        <span class="sname">${esc(schedName(id))}</span>
+        <button class="btn" data-s="dec" data-id="${esc(id)}" aria-label="Lower ${esc(schedName(id))}">−</button>
+        <button class="stval tval" data-s="clear" data-id="${esc(id)}" ${b.targets[id] == null ? "disabled" : ""}
+                title="Remove from this block">${b.targets[id] != null ? b.targets[id].toFixed(1) + "°" : "–"}</button>
+        <button class="btn" data-s="inc" data-id="${esc(id)}" aria-label="Raise ${esc(schedName(id))}">+</button>
+      </div>`).join("")}
+    </div>`).join("")}
+    <div style="text-align:center;margin-bottom:6px"><button class="btn" data-s="add" data-p="${pi}">Add block</button></div>`).join("")
+    + (sched.programs.length ? "" : `<div class="meta" style="padding:10px 0">No schedule yet.</div>
+       <button class="btn" data-s="template">Create a weekday + weekend template</button>`);
+}
+
+$("#schedenable").onclick = () => { sched.enabled = !sched.enabled; schedDirty = true; renderSchedule(); };
+$("#schedbody").addEventListener("click", (ev) => {
+  const el = ev.target.closest("[data-s]");
+  if (!el || el.tagName === "INPUT") return;
+  const act = el.dataset.s;
+  const blockEl = el.closest(".sblock");
+  const p = sched.programs[+(blockEl ? blockEl.dataset.p : el.dataset.p)];
+  const b = blockEl && p.blocks[+blockEl.dataset.b];
+  if (act === "dec" || act === "inc") {
+    const cur = b.targets[el.dataset.id];
+    b.targets[el.dataset.id] = Math.min(30, Math.max(5, (cur ?? 16) + (cur == null ? 0 : act === "inc" ? 0.5 : -0.5)));
+  } else if (act === "clear") delete b.targets[el.dataset.id];
+  else if (act === "del") p.blocks.splice(+blockEl.dataset.b, 1);
+  else if (act === "add") {
+    const last = p.blocks[p.blocks.length - 1];
+    let h = Math.min(23, +(last?.time ?? "06:00").slice(0, 2) + 1);
+    let time = `${String(h).padStart(2, "0")}:00`;
+    while (p.blocks.some((x) => x.time === time) && h < 23) time = `${String(++h).padStart(2, "0")}:00`;
+    p.blocks.push({ time, targets: { ...(last?.targets ?? {}) } });
+    p.blocks.sort((a, z) => a.time.localeCompare(z.time));
+  } else if (act === "template") {
+    const targets = Object.fromEntries(heaters.map((h) => [h.id, 16]));
+    sched.programs = [
+      { name: "Weekdays", days: [0, 1, 2, 3, 4], blocks: [{ time: "00:00", targets: { ...targets } }] },
+      { name: "Weekend", days: [5, 6], blocks: [{ time: "00:00", targets: { ...targets } }] },
+    ];
+  } else return;
+  schedDirty = true;
+  renderSchedule();
+});
+$("#schedbody").addEventListener("change", (ev) => {
+  if (ev.target.dataset.s !== "time") return;
+  const blockEl = ev.target.closest(".sblock");
+  const p = sched.programs[+blockEl.dataset.p], b = p.blocks[+blockEl.dataset.b];
+  const v = ev.target.value;
+  if (/^\d{2}:\d{2}$/.test(v) && !p.blocks.some((x) => x !== b && x.time === v)) {
+    b.time = v;
+    p.blocks.sort((a, z) => a.time.localeCompare(z.time));
+  }
+  schedDirty = true;
+  renderSchedule();
+});
+$("#schedsave").onclick = async () => {
+  try {
+    const r = await fetch("/api/heating/schedule", { method: "PUT", headers: { "Content-Type": "application/json" },
+                                                     body: JSON.stringify(sched) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    sched = await r.json();
+    schedDirty = false;
+    renderSchedule();
+    toast("Schedule saved");
+  } catch (e) { toast(e.message); }
+};
+async function closeSchedule() {
+  if (schedDirty && !await askConfirm({ title: "Discard changes?", text: "The schedule has edits you haven't saved.", ok: "Discard" })) return;
+  $("#sched").close();
+}
+$("#schedclose").onclick = closeSchedule;
+$("#sched").addEventListener("click", (e) => { if (e.target.id === "sched") closeSchedule(); });
+
 // ---------------------------------------------------------------- header actions
 $("#alloff").onclick = async () => {
   try { const r = await api("/api/scenes/all-off"); toast(`Switched off ${r.switched_off} device(s)`); }
@@ -813,6 +956,8 @@ function openViewer(c, quality = "hd") {
   const active = () => viewer.id === token;
   const snap = $("#viewersnap"), live = $("#viewerlive"), note = $("#vnote");
   $("#viewercap").textContent = c.name;
+  $("#vrecs").hidden = !c.recordings;
+  $("#vrecs").onclick = () => openRecordings(c);  // closes the viewer itself
   document.querySelectorAll(".vbtn[data-q]").forEach((b) => { b.classList.toggle("active", b.dataset.q === quality); b.hidden = !camLive; });
   snap.src = document.querySelector(`.cam[data-cam="${CSS.escape(c.id)}"] img`).src || "";
   const rtsp = `RTSP for VLC: <code>${esc(quality === "sd" ? c.rtsp.low : c.rtsp.high)}</code>`;
