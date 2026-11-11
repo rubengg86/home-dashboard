@@ -233,6 +233,8 @@
   #sched .sfoot { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
   .sblock { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
   .sblock .tset { margin: 6px 0; }
+  .sblock.now { border-color: var(--accent); }
+  .snow { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
   .sblock .btn { background: var(--card); }
   .sblock input[type=time] { font: inherit; font-weight: 650; color: inherit; background: var(--card);
                              border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
@@ -759,6 +761,14 @@ let sched = null, schedDirty = false;
 const schedName = (id) => { const r = heaters.find((h) => h.id === id); return r ? (r.area || r.name) : id; };
 const schedIds = (b) => { const ids = heaters.map((h) => h.id);
                           return [...ids, ...Object.keys(b.targets).filter((id) => !ids.includes(id))]; };
+const schedNowKey = () => { // mirrors the server: today's program, last started block, wrapping to the last
+  const day = (new Date().getDay() + 6) % 7, hhmm = new Date().toTimeString().slice(0, 5);
+  const pi = sched.programs.findIndex((p) => p.days.includes(day));
+  if (pi < 0) return null;
+  const started = sched.programs[pi].blocks.filter((b) => b.time <= hhmm);
+  const b = (started.length ? started : sched.programs[pi].blocks).reduce((a, x) => (x.time > a.time ? x : a));
+  return `${pi}:${b.time}`;
+};
 
 $("#schedbtn").onclick = async () => {
   try { sched = await getJSON("/api/heating/schedule"); }
@@ -773,12 +783,14 @@ function renderSchedule() {
   $("#schednote").textContent = schedDirty ? "Unsaved changes" : sched.error ? `Schedule: ${sched.error}` : "";
   $("#schedenable").classList.toggle("on", sched.enabled);
   const end = (p, i) => p.blocks[(i + 1) % p.blocks.length].time;
+  const nowKey = schedNowKey();
   $("#schedbody").innerHTML = sched.programs.map((p, pi) => `
     <h4>${esc(p.name)} <span class="count">${p.days.map((d) => SDAYS[d] ?? d).join(" · ")}</span></h4>
     ${p.blocks.map((b, bi) => `
-    <div class="sblock" data-p="${pi}" data-b="${bi}">
+    <div class="sblock${`${pi}:${b.time}` === nowKey ? " now" : ""}" data-p="${pi}" data-b="${bi}">
       <div class="tset">
         <input type="time" value="${esc(b.time)}" data-s="time" aria-label="Start of the block">
+        ${`${pi}:${b.time}` === nowKey ? `<span class="snow">Now</span>` : ""}
         <span class="meta">until ${esc(end(p, bi))}</span>
         <span style="flex:1"></span>
         ${p.blocks.length > 1 ? `<button class="sdel" data-s="del" aria-label="Remove this block">✕</button>` : ""}

@@ -27,10 +27,11 @@
     @for (p of d.programs; track p.name) {
       <div class="section-title">{{ p.name }} <span class="days">{{ daysLabel(p.days) }}</span></div>
       @for (b of p.blocks; track b) {
-        <div class="card block">
+        <div class="card block" [class.now]="isNow(p, b)">
           <div class="row head">
             <input class="time" type="time" [value]="b.time" (change)="setTime(p, b, $any($event.target).value)"
                    [attr.aria-label]="'Start of the ' + b.time + ' block'">
+            @if (isNow(p, b)) { <span class="nowchip">Now</span> }
             <span class="meta">until {{ endOf(p, $index) }}</span>
             <span class="grow"></span>
             @if (p.blocks.length > 1) {

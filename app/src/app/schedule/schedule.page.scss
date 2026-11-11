@@ -3,6 +3,9 @@ ion-title { font-size: 22px; font-weight: 700; padding-top: 6px; }
 .section-title .days { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--app-muted); margin-left: 8px; }
 
 .block { margin-bottom: 12px; }
+.block.now { border-color: var(--ion-color-primary); }
+.nowchip { background: var(--ion-color-primary); color: #fff; font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px; }
 .head { margin-bottom: 4px; }
 .time { font: inherit; font-size: 17px; font-weight: 650; color: inherit; background: var(--app-card-2);
   border: 1px solid var(--app-line); border-radius: 10px; padding: 5px 10px; }

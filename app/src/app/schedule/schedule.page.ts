@@ -125,6 +125,16 @@ export class SchedulePage implements ViewWillEnter {
     this.dirty.set(true);
   }
 
+  /** Mirrors the server's current_block: today's program, last started block, wrapping to the last. */
+  isNow(p: ScheduleProgram, b: ScheduleBlock): boolean {
+    const now = new Date();
+    if (!p.days.includes((now.getDay() + 6) % 7)) return false;
+    const hhmm = now.toTimeString().slice(0, 5);
+    const started = p.blocks.filter((x) => x.time <= hhmm);
+    const active = (started.length ? started : p.blocks).reduce((a, x) => (x.time > a.time ? x : a));
+    return b === active;
+  }
+
   // ------------------------------------------------------------ labels
   radiatorLabel(id: string): string {
     const r = this.live.radiators().find((x) => x.id === id);
