@@ -47,6 +47,7 @@ docker compose logs -f
 - Automations: copy `actions.example.json` to `actions.json` and map button alias → event → action. The supported actions are `toggle`, `on`, `off` (one alias or a list) and `"all_off"`. The file is reloaded on each press, so you don't need to restart. Event names come from the hub (e.g. `singleClick`, `doubleClick`, `rotation`); check the feed to see the exact names.
 - Cameras (yi-hack): set `CAMERAS=Name=IP` in `.env`. The backend fetches the camera's `/cgi-bin/snapshot.sh` and the page refreshes it every `SNAPSHOT_SECONDS`. Click a camera to open **live video** in a modal (HD/SD toggle). The backend starts `ffmpeg` (`brew install ffmpeg`) on demand, turns the camera's RTSP stream into MJPEG (`LIVE_FPS`, `LIVE_MAX_WIDTH`), shares it between viewers and stops it 10 s after the last one closes. Without ffmpeg, the modal falls back to HD snapshots. The RTSP URL is shown on the card for VLC. Use `Name=http://user:pass@IP` if you set a web UI password; the credentials stay on the server.
 - Samsung washer/dryer (SmartThings cloud, they have no local API): set `SMARTTHINGS_TOKEN` in `.env`. Status is polled every 30 s and shows state, phase, minutes left and a progress bar. `started` and `finished` events go to the Activity feed and work in `actions.json`, e.g. `"Washer": {"finished": {"toggle": "Living room bulb"}}`. New personal access tokens expire after 24 h. On a 401 the backend re-reads `.env`, so pasting a fresh token there is enough.
+- Radiators via Home Assistant: live cards per heater (named by their HA area, e.g. *Bedroom*), on/off, target temperature steppers, live power, a combined "Heating" series in the energy charts and a weekly schedule editor. See [Radiators](#radiators-home-assistant--termoweb).
 - **All off** scene and **Rediscover** button. Devices listed in `CONFIRM_OFF` (e.g. a fridge plug) ask for confirmation before switching off and are skipped by All off.
 - Each device is polled on its own task with backoff, so one offline device doesn't slow down the others.
 
@@ -62,10 +63,15 @@ docker compose logs -f
 | POST | `/api/scenes/all-off` | – |
 | POST | `/api/discover` | – |
 | GET | `/api/appliances` | – |
+| GET | `/api/climate` | – (radiators + gateway warning) |
+| POST | `/api/climate/{entity_id}/state` | `{"on": true}` (`null` toggles) |
+| POST | `/api/climate/{entity_id}/temperature` | `{"value": 19.5}` |
+| GET | `/api/ha/areas` | – (HA floors + areas) |
+| GET/PUT | `/api/heating/schedule` | the schedule JSON |
 | GET | `/api/cameras` | – |
 | GET | `/api/cameras/{id}/live?q=hd\|sd` | – (MJPEG stream) |
 | GET | `/api/cameras/{id}/snapshot?res=low\|high` | – (JPEG) |
-| WS | `/ws` | pushes `devices`, `events`, `event` messages |
+| WS | `/ws` | pushes `devices`, `events`, `event`, `climate` messages |
 
 ## Mobile app
 
@@ -88,7 +94,7 @@ Same features as the web dashboard, for the iOS/Android app. Interactive docs: `
 
 Every other call sends `Authorization: Bearer <access_token>`. On a 401, refresh once and retry; if refresh fails, show the login screen. Camera images, the MJPEG live stream, recording clips and the WebSocket take `?token=<stream token>` instead (`<img src>`, `<video src>` and WebSockets can't set headers). Changing `DASHBOARD_PASS` logs out every app. 5 wrong passwords in 5 minutes from one IP block logins for a while (429).
 
-**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event` messages). All under `/api/v1`.
+**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /climate` · `POST /climate/{id}/state {on}` · `POST /climate/{id}/temperature {value}` · `GET /ha/areas` · `GET/PUT /heating/schedule` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event`, `climate` messages). All under `/api/v1`.
 
 CORS allows the Capacitor/Ionic origins (`capacitor://localhost`, `http://localhost`, `http://localhost:8100` for `ionic serve`); change with `API_CORS_ORIGINS`. Tokens are signed with a key generated in `data/.api_secret` (or `API_SECRET`).
 
@@ -123,6 +129,28 @@ If the dashboard is off for more than ~29 days, the refresh token expires and th
 - **Safety cap**: `HEATER_MAX_ON_MINUTES` (default 180) switches it off if it stays on without a timer.
 - **Events / actions**: `heating`, `hot_water_ready`, `safety_off` (in Activity) plus `on`/`off`. In `actions.json`, `{"boost": {"Agua caliente": 30}}` works from any trigger, e.g. an S200B double press.
 - If the plug moves IP, it's found again by broadcast after a few failed polls. Re-run the wizard if you re-pair it in Smart Life, since that changes its key.
+
+## Radiators (Home Assistant + TermoWeb)
+
+The electric radiators are driven through **Home Assistant**, which the dashboard mirrors live over HA's WebSocket API. Requirements:
+
+- A Home Assistant server (here it runs on the same box as the dashboard).
+- A TermoWeb radio gateway paired with the heaters, integrated into HA with [ha-termoweb](https://github.com/ha-termoweb/ha-termoweb). It creates one `climate` entity per heater plus its temperature/energy/power sensors.
+
+Setup:
+
+1. In HA, assign each heater to an **area** (and optionally a floor) — the dashboard uses the area as the heater's display name (e.g. *Bedroom*).
+2. Create a long-lived access token: HA profile → **Security** → **Long-lived access tokens**.
+3. Set `HA_URL` and `HA_TOKEN` in `.env` (in `data/` on Docker) and restart.
+
+What you get, on the web dashboard and in the app:
+
+- A **Heating** section with one card per `climate` entity: current and target temperature, Heating/Idle/Off state, on/off switch and ± target steppers. Changes made in HA, on the heater itself or by the schedule show up live.
+- **Gateway watchdog**: HA keeps climate entities "available" with stale state when the radio gateway drops, so the dashboard follows each heater's `via_device` chain and watches the hub's connectivity sensors (e.g. the gateway's *online* sensor). When the gateway is down the cards gray out and a **"Heater gateway offline"** banner shows.
+- **Energy**: the heaters' kWh sensors are summed into one **Heating** series in the energy charts (from HA's long-term statistics, with guards against counter-reset artifacts), and their live W feeds the "using now" widget.
+- **Weekly schedule**: the Schedule tab (app) / Schedule button (web) edits `data/heating_schedule.json` — programs (e.g. Weekdays/Weekend) with blocks that start at a time and run until the next one, each setting per-heater targets. A server-side scheduler (30 s tick) sends the targets when a block begins, so a manual change on a radiator holds until the next block, like a classic thermostat. It keeps retrying while HA is unreachable, and the block in effect right now is highlighted in the editor. Start from `heating_schedule.example.json`.
+
+HA is also the long-term plan for the house layout: phase 2 will map the Tapo devices onto HA's areas and retire `rooms.json`.
 
 ## Camera recordings (FTP)
 
