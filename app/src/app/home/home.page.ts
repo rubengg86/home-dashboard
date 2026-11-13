@@ -68,6 +68,20 @@ export class HomePage {
     return !r.online ? 'Offline' : r.action === 'heating' ? 'Heating' : r.on ? 'Idle' : 'Off';
   }
 
+  awayLabel(): string {
+    const a = this.live.away();
+    if (!a.plan) return '';
+    const f = (s: string) => new Date(s).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short',
+                                                              hour: '2-digit', minute: '2-digit' });
+    return `${a.active ? 'Until ' + f(a.plan.until) : f(a.plan.from) + ' → ' + f(a.plan.until)}`
+      + ` · heaters ≤ ${a.plan.cap_c}° · water heater off`;
+  }
+
+  async cancelAway(): Promise<void> {
+    if (!await this.ui.confirm('Cancel out of home?', 'Heaters go back to the weekly schedule.', 'Cancel it')) return;
+    await this.ui.run(() => this.live.cancelAway());
+  }
+
   async toggleRadiator(r: Radiator, on: boolean): Promise<void> {
     if (r.on === on) return;  // the toggle fires ionChange for WS-pushed states too
     await this.ui.run(() => this.live.setRadiator(r, on));

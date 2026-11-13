@@ -68,10 +68,11 @@ docker compose logs -f
 | POST | `/api/climate/{entity_id}/temperature` | `{"value": 19.5}` |
 | GET | `/api/ha/areas` | – (HA floors + areas) |
 | GET/PUT | `/api/heating/schedule` | the schedule JSON |
+| GET/PUT/DELETE | `/api/away` | `{"from", "until", "cap_c"}` (out-of-home plan) |
 | GET | `/api/cameras` | – |
 | GET | `/api/cameras/{id}/live?q=hd\|sd` | – (MJPEG stream) |
 | GET | `/api/cameras/{id}/snapshot?res=low\|high` | – (JPEG) |
-| WS | `/ws` | pushes `devices`, `events`, `event`, `climate` messages |
+| WS | `/ws` | pushes `devices`, `events`, `event`, `climate`, `away` messages |
 
 ## Mobile app
 
@@ -94,7 +95,7 @@ Same features as the web dashboard, for the iOS/Android app. Interactive docs: `
 
 Every other call sends `Authorization: Bearer <access_token>`. On a 401, refresh once and retry; if refresh fails, show the login screen. Camera images, the MJPEG live stream, recording clips and the WebSocket take `?token=<stream token>` instead (`<img src>`, `<video src>` and WebSockets can't set headers). Changing `DASHBOARD_PASS` logs out every app. 5 wrong passwords in 5 minutes from one IP block logins for a while (429).
 
-**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /climate` · `POST /climate/{id}/state {on}` · `POST /climate/{id}/temperature {value}` · `GET /ha/areas` · `GET/PUT /heating/schedule` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event`, `climate` messages). All under `/api/v1`.
+**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /climate` · `POST /climate/{id}/state {on}` · `POST /climate/{id}/temperature {value}` · `GET /ha/areas` · `GET/PUT /heating/schedule` · `GET/PUT/DELETE /away` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event`, `climate`, `away` messages). All under `/api/v1`.
 
 CORS allows the Capacitor/Ionic origins (`capacitor://localhost`, `http://localhost`, `http://localhost:8100` for `ionic serve`); change with `API_CORS_ORIGINS`. Tokens are signed with a key generated in `data/.api_secret` (or `API_SECRET`).
 
@@ -148,6 +149,7 @@ What you get, on the web dashboard and in the app:
 - A **Heating** section with one card per `climate` entity: current and target temperature, Heating/Idle/Off state, on/off switch and ± target steppers. Changes made in HA, on the heater itself or by the schedule show up live.
 - **Gateway watchdog**: HA keeps climate entities "available" with stale state when the radio gateway drops, so the dashboard follows each heater's `via_device` chain and watches the hub's connectivity sensors (e.g. the gateway's *online* sensor). When the gateway is down the cards gray out and a **"Heater gateway offline"** banner shows.
 - **Energy**: the heaters' kWh sensors are summed into one **Heating** series in the energy charts (from HA's long-term statistics, with guards against counter-reset artifacts), and their live W feeds the "using now" widget.
+- **Out of home**: the *Out of home* button (web, in the Heating section) or card (app, Schedule tab) takes a departure, a return and a max temperature (default 15 °C). While away, any radiator target above the cap is pulled back down — manual changes included — the immersion heater stays off and the weekly schedule pauses. For the last hour before the return the immersion heater runs (using the plug's own countdown, so it's bounded even if the dashboard dies), so there's hot water on arrival. Everything resumes by itself at the return time, and the plan (stored in `data/away.json`, so it survives restarts) can be cancelled at any time from either UI.
 - **Weekly schedule**: the Schedule tab (app) / Schedule button (web) edits `data/heating_schedule.json` — programs (e.g. Weekdays/Weekend) with blocks that start at a time and run until the next one, each setting per-heater targets. A server-side scheduler (30 s tick) sends the targets when a block begins, so a manual change on a radiator holds until the next block, like a classic thermostat. It keeps retrying while HA is unreachable, and the block in effect right now is highlighted in the editor. Start from `heating_schedule.example.json`.
 
 HA is also the long-term plan for the house layout: phase 2 will map the Tapo devices onto HA's areas and retire `rooms.json`.

@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { App } from '@capacitor/app';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
-import { Appliances, Cameras, Climate, DashEvent, Device, Energy, Heater, Overview, Radiator, Sensor } from './models';
+import { Appliances, AwayState, Cameras, Climate, DashEvent, Device, Energy, Heater, Overview, Radiator, Sensor } from './models';
 
 /**
  * The app's single source of truth: loads /overview, then keeps it current from the WebSocket
@@ -19,6 +19,7 @@ export class LiveService {
   readonly radiators = signal<Radiator[]>([]);
   readonly haError = signal<string | null>(null);
   readonly haWarning = signal<string | null>(null);
+  readonly away = signal<AwayState>({ plan: null, active: false });
   readonly appliances = signal<Appliances>({ error: null, appliances: [] });
   readonly events = signal<DashEvent[]>([]);
   readonly cameras = signal<Cameras>({ refresh_seconds: 2, live: false, cameras: [] });
@@ -95,6 +96,7 @@ export class LiveService {
       this.devices.set(o.devices);
       this.heaters.set(o.heaters);
       this.radiators.set(this.withHolds(o.climate ?? []));
+      this.away.set(o.away ?? { plan: null, active: false });
       this.appliances.set(o.appliances);
       this.events.set(o.events);
       this.cameras.set(o.cameras);
@@ -105,6 +107,14 @@ export class LiveService {
     } catch (e) {
       this.error.set(errorText(e));
     }
+  }
+
+  async setAway(body: { from: string | null; until: string; cap_c: number }): Promise<void> {
+    this.away.set(await firstValueFrom(this.http.put<AwayState>('/api/v1/away', body)));
+  }
+
+  async cancelAway(): Promise<void> {
+    this.away.set(await firstValueFrom(this.http.delete<AwayState>('/api/v1/away')));
   }
 
   async loadEnergy(): Promise<void> {
@@ -160,6 +170,7 @@ export class LiveService {
         this.haWarning.set(msg.warning ?? null);
         break;
       case 'appliances': this.appliances.set({ error: msg.error, auth: msg.auth, appliances: msg.appliances }); break;
+      case 'away': this.away.set({ plan: msg.plan, active: msg.active }); break;
       case 'events': this.events.set(msg.events); break;
       case 'event': this.events.update((e) => [msg.event, ...e].slice(0, 50)); break;
     }

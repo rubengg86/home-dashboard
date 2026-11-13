@@ -235,6 +235,12 @@
   .sblock .tset { margin: 6px 0; }
   .sblock.now { border-color: var(--accent); }
   .snow { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  #awaybanner { display: flex; gap: 12px; align-items: center; border: 1px solid var(--on);
+                background: var(--card-2); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; }
+  #awaybanner .btn { margin-left: auto; flex: none; }
+  #awaybody input[type=datetime-local], #awaybody input[type=number] {
+    font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 6px 10px; }
   .sblock .btn { background: var(--card); }
   .sblock input[type=time] { font: inherit; font-weight: 650; color: inherit; background: var(--card);
                              border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
@@ -274,7 +280,9 @@
   <div>
     <section id="heating" hidden>
       <h2>Heating <span class="count" id="heatsub"></span>
-        <button class="btn" id="schedbtn" style="margin-left:auto;text-transform:none;letter-spacing:0">Schedule</button></h2>
+        <button class="btn" id="awaybtn" style="margin-left:auto;text-transform:none;letter-spacing:0">Out of home</button>
+        <button class="btn" id="schedbtn" style="text-transform:none;letter-spacing:0">Schedule</button></h2>
+      <div id="awaybanner" hidden></div>
       <div class="grid" id="heatcards"></div>
       <div class="err" id="haerr" hidden style="margin-top:8px"></div>
     </section>
@@ -365,6 +373,13 @@
     </div>
   </div>
 </div>
+<dialog id="away" aria-labelledby="awaytitle">
+  <div class="shd">
+    <h3 id="awaytitle">Out of home</h3>
+    <button class="btn" id="awayclose" aria-label="Close" style="margin-left:auto">✕</button>
+  </div>
+  <div class="sbody" id="awaybody"></div>
+</dialog>
 <dialog id="sched" aria-labelledby="schedtitle">
   <div class="shd">
     <h3 id="schedtitle">Heating schedule</h3>
@@ -869,6 +884,69 @@ async function closeSchedule() {
 $("#schedclose").onclick = closeSchedule;
 $("#sched").addEventListener("click", (e) => { if (e.target.id === "sched") closeSchedule(); });
 
+// ---------------------------------------------------------------- out of home
+let away = { plan: null, active: false };
+const awayFmt = (s) => new Date(s).toLocaleString([], { weekday: "short", day: "numeric", month: "short",
+                                                        hour: "2-digit", minute: "2-digit" });
+const localNow = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                         return d.toISOString().slice(0, 16); };
+
+function renderAway() {
+  const p = away.plan;
+  $("#awaybanner").hidden = !p;
+  if (p) $("#awaybanner").innerHTML = `
+    <span>🧳 <b>Out of home</b> ${away.active ? `until ${awayFmt(p.until)}` : `${awayFmt(p.from)} → ${awayFmt(p.until)}`}
+      <span class="meta">· heaters ≤ ${p.cap_c}° · water heater off</span></span>
+    <button class="btn" data-away="cancel">Cancel</button>`;
+  if ($("#away").open) renderAwayDialog();
+}
+
+function renderAwayDialog() {
+  const p = away.plan;
+  $("#awaybody").innerHTML = p ? `
+    <p>${away.active ? `Active until <b>${awayFmt(p.until)}</b>.` : `Leaving <b>${awayFmt(p.from)}</b>, back <b>${awayFmt(p.until)}</b>.`}</p>
+    <p class="meta">Radiators stay at or below ${p.cap_c}° and the water heater stays off${p.boosted ? ""
+      : "; it will run for the hour before you're back"}. The weekly schedule takes over again when this ends.</p>
+    <button class="btn danger" data-away="cancel" style="width:100%">Cancel out of home</button>` : `
+    <div class="tset"><span class="sname">Leaving</span><input type="datetime-local" id="awayfrom" value="${localNow()}"></div>
+    <div class="tset"><span class="sname">Back</span><input type="datetime-local" id="awayuntil" min="${localNow()}"></div>
+    <div class="tset"><span class="sname">Max heater °C</span><input type="number" id="awaycap" min="5" max="30" step="0.5" value="15"></div>
+    <p class="meta">While you're away the radiators are capped, the water heater stays off and the weekly schedule
+      pauses. The water heater runs for the hour before you're back, so there's hot water on arrival; everything
+      else resumes at the return time. You can cancel at any time.</p>
+    <button class="btn primary" data-away="save" style="width:100%">Set out of home</button>`;
+}
+
+async function awayAction(el) {
+  try {
+    if (el.dataset.away === "save") {
+      if (!$("#awayuntil").value) return toast("Set the return day and time");
+      away = await sendJSON("/api/away", "PUT", { from: $("#awayfrom").value || null,
+                                                  until: $("#awayuntil").value,
+                                                  cap_c: +$("#awaycap").value || 15 });
+      $("#away").close();
+      toast("Out of home set");
+    } else {
+      if (!await askConfirm({ title: "Cancel out of home?", text: "Heaters go back to the weekly schedule.", ok: "Cancel it" })) return;
+      away = await sendJSON("/api/away", "DELETE");
+      $("#away").close();
+      toast("Out of home cancelled");
+    }
+    renderAway();
+  } catch (e) { toast(e.message); }
+}
+async function sendJSON(path, method, body) {
+  const r = await fetch(path, { method, headers: { "Content-Type": "application/json" },
+                                body: body ? JSON.stringify(body) : undefined });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+$("#awaybtn").onclick = () => { renderAwayDialog(); $("#away").showModal(); };
+$("#awayclose").onclick = () => $("#away").close();
+$("#away").addEventListener("click", (e) => { if (e.target.id === "away") $("#away").close(); });
+for (const host of ["#awaybody", "#awaybanner"])
+  $(host).addEventListener("click", (ev) => { const el = ev.target.closest("[data-away]"); if (el) awayAction(el); });
+
 // ---------------------------------------------------------------- header actions
 $("#alloff").onclick = async () => {
   try { const r = await api("/api/scenes/all-off"); toast(`Switched off ${r.switched_off} device(s)`); }
@@ -896,6 +974,7 @@ function connect() {
     else if (msg.type === "appliances") renderAppliances(msg);
     else if (msg.type === "tuya") renderTuya(msg.devices);
     else if (msg.type === "climate") renderClimate(msg);
+    else if (msg.type === "away") { away = { plan: msg.plan, active: msg.active }; renderAway(); }
     if (msg.type === "devices" || msg.type === "tuya" || msg.type === "climate") renderEnergyNow();
   };
   ws.onclose = () => {

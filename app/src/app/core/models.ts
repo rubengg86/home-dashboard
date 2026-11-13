@@ -150,10 +150,23 @@ export interface HeatingScheduleDoc {
   error?: string | null;
 }
 
+export interface AwayPlan {
+  from: string;   // local, YYYY-MM-DDTHH:MM
+  until: string;
+  cap_c: number;
+  boosted?: boolean;
+}
+
+export interface AwayState {
+  plan: AwayPlan | null;
+  active: boolean;
+}
+
 export interface Overview {
   devices: Device[];
   heaters: Heater[];
   climate: Radiator[];
+  away?: AwayState;
   appliances: Appliances;
   events: DashEvent[];
   cameras: Cameras;

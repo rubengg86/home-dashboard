@@ -12,6 +12,55 @@
 
   @if (error()) { <div class="card"><div class="err">{{ error() }}</div></div> }
 
+  @if (live.away(); as a) {
+    <div class="card" [class.on]="a.active">
+      @if (a.plan; as p) {
+        <div class="row">
+          <div class="grow">
+            <div class="name">Out of home</div>
+            <div class="meta">{{ a.active ? 'Until ' + fmtAway(p.until) : fmtAway(p.from) + ' → ' + fmtAway(p.until) }}
+              · heaters ≤ {{ p.cap_c | number: '1.1-1' }}° · water heater off</div>
+          </div>
+          <ion-button size="small" fill="outline" color="medium" (click)="cancelAway()" [disabled]="awayBusy()">Cancel</ion-button>
+        </div>
+      } @else if (awayOpen()) {
+        <div class="name" style="margin-bottom: 10px">Out of home</div>
+        <div class="row rrow">
+          <div class="grow name rname">Leaving</div>
+          <input class="time" type="datetime-local" [value]="awayFrom" (change)="awayFrom = $any($event.target).value"
+                 aria-label="Departure day and time">
+        </div>
+        <div class="row rrow">
+          <div class="grow name rname">Back</div>
+          <input class="time" type="datetime-local" [value]="awayUntil" (change)="awayUntil = $any($event.target).value"
+                 aria-label="Return day and time">
+        </div>
+        <div class="row rrow">
+          <div class="grow name rname">Max heater °C</div>
+          <button class="tbtn" (click)="nudgeAwayCap(-1)" aria-label="Lower the away cap">−</button>
+          <span class="tval tnum">{{ awayCap | number: '1.1-1' }}°</span>
+          <button class="tbtn" (click)="nudgeAwayCap(1)" aria-label="Raise the away cap">+</button>
+        </div>
+        <div class="meta" style="margin: 10px 0 4px">While you're away the radiators are capped, the water heater
+          stays off and the weekly schedule pauses. The water heater runs for the hour before you're back, so
+          there's hot water on arrival. Cancel at any time.</div>
+        <div class="row">
+          <ion-button size="small" fill="clear" color="medium" (click)="awayOpen.set(false)">Close</ion-button>
+          <span class="grow"></span>
+          <ion-button size="small" (click)="setAway()" [disabled]="awayBusy()">Set out of home</ion-button>
+        </div>
+      } @else {
+        <div class="row">
+          <div class="grow">
+            <div class="name">Out of home</div>
+            <div class="meta">Cap the heaters and keep the water heater off while you're away</div>
+          </div>
+          <ion-button size="small" (click)="openAway()">Set up</ion-button>
+        </div>
+      }
+    </div>
+  }
+
   @if (doc(); as d) {
     <div class="card">
       <div class="row">

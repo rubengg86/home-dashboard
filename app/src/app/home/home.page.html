@@ -36,6 +36,20 @@
     </div>
   }
 
+  <!-- out of home (set up on the Schedule tab) -->
+  @if (live.away().plan; as p) {
+    <div class="card" [class.on]="live.away().active">
+      <div class="row">
+        <span class="ico">🧳</span>
+        <div class="grow">
+          <div class="name">Out of home</div>
+          <div class="meta">{{ awayLabel() }}</div>
+        </div>
+        <button class="tbtn" (click)="cancelAway()">Cancel</button>
+      </div>
+    </div>
+  }
+
   <!-- radiators (Home Assistant) -->
   @if (live.radiators().length) {
     <div class="section-title">Heating</div>

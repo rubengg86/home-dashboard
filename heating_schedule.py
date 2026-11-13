@@ -18,6 +18,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import Callable
 
 from ha import HomeAssistant
 
@@ -71,6 +72,11 @@ class HeatingSchedule:
         self.data = self._load()
         self._applied: tuple | None = None  # (program idx, block time) last sent successfully
         self._task: asyncio.Task | None = None
+        self.paused: Callable[[], bool] | None = None  # e.g. away mode; it caps the heaters itself
+
+    def reapply(self) -> None:
+        """Forget what was sent, so the current block is re-applied on the next tick."""
+        self._applied = None
 
     def _load(self) -> dict:
         try:
@@ -128,7 +134,7 @@ class HeatingSchedule:
             await asyncio.sleep(self.TICK_SECONDS)
 
     async def _tick(self) -> None:
-        if not self.data["enabled"]:
+        if not self.data["enabled"] or (self.paused and self.paused()):
             return
         cur = self.current_block()
         if cur is None or cur[0] == self._applied:

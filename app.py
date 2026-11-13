@@ -22,12 +22,13 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request, WebSocket, WebSo
 from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from auth import TokenStore, auth_router
 from cameras import CameraManager
 from devices import DeviceManager
 from ha import HomeAssistant
+from away import AwayManager
 from heating_schedule import HeatingSchedule
 from smartthings import SmartThings
 from smartthings_auth import OAuth, PatAuth
@@ -115,6 +116,10 @@ if os.getenv("HA_URL") and os.getenv("HA_TOKEN"):
     schedule = HeatingSchedule(ha, DATA / "heating_schedule.json")
 else:
     log.info("Home Assistant disabled: set HA_URL and HA_TOKEN (profile -> Security -> long-lived token)")
+
+away = AwayManager(DATA / "away.json", ha=ha, tuya=tuya, schedule=schedule) if (ha or tuya) else None
+if schedule and away:
+    schedule.paused = away.active  # away caps the heaters itself; the weekly blocks wait
 
 # ---------------------------------------------------------------- automations
 # actions.json maps source alias -> event name -> action, e.g.
@@ -214,7 +219,12 @@ async def lifespan(_: FastAPI):
         await ha.start()
     if schedule:
         await schedule.start()
+    if away:
+        away.on_update(broadcast)
+        await away.start()
     yield
+    if away:
+        await away.stop()
     await manager.stop()
     await cameras.close()
     if smartthings:
@@ -529,6 +539,35 @@ async def put_schedule(body: dict):
         raise HTTPException(400, str(e))
 
 
+# ---------------------------------------------------------------- out of home
+class AwayBody(BaseModel):
+    until: str                                      # return, YYYY-MM-DDTHH:MM local
+    from_: str | None = Field(None, alias="from")   # departure; empty = leaving now
+    cap_c: float = 15                               # max radiator target while away
+
+
+@api.get("/away")
+async def get_away():
+    return away.snapshot() if away else {"plan": None, "active": False}
+
+
+@api.put("/away")
+async def put_away(body: AwayBody):
+    if away is None:
+        raise HTTPException(400, "No heaters configured")
+    try:
+        return await away.set(body.model_dump(by_alias=True))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@api.delete("/away")
+async def delete_away():
+    if away is None:
+        raise HTTPException(400, "No heaters configured")
+    return await away.cancel()
+
+
 def _buckets(rng: str) -> list[tuple[str, str]]:
     """(key, ISO start) for each bar of a chart range, oldest first."""
     now = dt.datetime.now()
@@ -691,6 +730,8 @@ async def ws_endpoint(ws: WebSocket):
     if ha:
         await ws.send_json({"type": "climate", "heaters": ha.snapshot(), "error": ha.error,
                             "warning": ha.warning()})
+    if away:
+        await ws.send_json({"type": "away", **away.snapshot()})
     try:
         while True:
             await ws.receive_text()  # keepalive pings from the client
@@ -711,6 +752,7 @@ async def overview():
         "heaters": tuya.snapshot() if tuya else [],
         "climate": ha.snapshot() if ha else [],
         "appliances": smartthings.snapshot() if smartthings else {"error": None, "appliances": []},
+        "away": away.snapshot() if away else {"plan": None, "active": False},
         "events": list(manager.events)[:20],
         "cameras": await list_cameras(),
         "price_per_kwh": float(os.getenv("ELECTRICITY_PRICE", "0")), "currency": os.getenv("CURRENCY", "€"),

@@ -39,6 +39,58 @@ export class SchedulePage implements ViewWillEnter {
     if (!this.dirty()) this.load();  // don't wipe unsaved edits when tabbing back
   }
 
+  // ------------------------------------------------------------ out of home
+  readonly awayOpen = signal(false);
+  readonly awayBusy = signal(false);
+  awayFrom = '';
+  awayUntil = '';
+  awayCap = 15;
+
+  openAway(): void {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    this.awayFrom = d.toISOString().slice(0, 16);
+    this.awayUntil = '';
+    this.awayCap = 15;
+    this.awayOpen.set(true);
+  }
+
+  fmtAway(s: string): string {
+    return new Date(s).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short',
+                                            hour: '2-digit', minute: '2-digit' });
+  }
+
+  nudgeAwayCap(dir: 1 | -1): void {
+    this.awayCap = Math.min(30, Math.max(5, this.awayCap + dir * 0.5));
+  }
+
+  async setAway(): Promise<void> {
+    if (!this.awayUntil) return this.ui.toast('Set the return day and time', true);
+    this.awayBusy.set(true);
+    try {
+      await this.ui.run(async () => {
+        await this.live.setAway({ from: this.awayFrom || null, until: this.awayUntil, cap_c: this.awayCap });
+        this.awayOpen.set(false);
+        this.ui.toast('Out of home set');
+      });
+    } finally {
+      this.awayBusy.set(false);
+    }
+  }
+
+  async cancelAway(): Promise<void> {
+    if (!await this.ui.confirm('Cancel out of home?', 'Heaters go back to the weekly schedule.', 'Cancel it')) return;
+    this.awayBusy.set(true);
+    try {
+      await this.ui.run(async () => {
+        await this.live.cancelAway();
+        this.ui.toast('Out of home cancelled');
+      });
+    } finally {
+      this.awayBusy.set(false);
+    }
+  }
+
   async load(): Promise<void> {
     try {
       this.doc.set(await firstValueFrom(this.http.get<HeatingScheduleDoc>('/api/v1/heating/schedule')));
