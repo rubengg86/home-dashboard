@@ -95,7 +95,7 @@ Same features as the web dashboard, for the iOS/Android app. Interactive docs: `
 
 Every other call sends `Authorization: Bearer <access_token>`. On a 401, refresh once and retry; if refresh fails, show the login screen. Camera images, the MJPEG live stream, recording clips and the WebSocket take `?token=<stream token>` instead (`<img src>`, `<video src>` and WebSockets can't set headers). Changing `DASHBOARD_PASS` logs out every app. 5 wrong passwords in 5 minutes from one IP block logins for a while (429).
 
-**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /climate` · `POST /climate/{id}/state {on}` · `POST /climate/{id}/temperature {value}` · `GET /ha/areas` · `GET/PUT /heating/schedule` · `GET/PUT/DELETE /away` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event`, `climate`, `away` messages). All under `/api/v1`.
+**Endpoints:** `GET /overview` (devices, heaters, appliances, recent events, cameras, price: the home screen in one call) · `GET /devices` · `POST /devices/{id}/state {on}` · `POST /devices/{id}/toggle` · `POST /devices/{id}/brightness {value}` · `POST /scenes/all-off` · `POST /discover` · `GET /events` · `GET /tuya` · `POST /tuya/{id}/state {on}` · `POST /tuya/{id}/boost {minutes}` · `GET /appliances` · `GET /energy` · `GET /climate` · `POST /climate/{id}/state {on}` · `POST /climate/{id}/temperature {value}` · `GET /ha/areas` · `GET/PUT /heating/schedule` · `GET/PUT/DELETE /away` · `GET /cameras` · `GET /cameras/{id}/snapshot` · `GET /cameras/{id}/live?q=hd|sd` · `GET /cameras/{id}/recordings[?dir=]` · `GET /cameras/{id}/recordings/file?path=` (Range supported) · `GET /cameras/{id}/recordings/thumb?path=` (preview frame, cached) · `WS /api/v1/ws?token=` (live updates: `devices`, `tuya`, `appliances`, `events`, `event`, `climate`, `away` messages). All under `/api/v1`.
 
 CORS allows the Capacitor/Ionic origins (`capacitor://localhost`, `http://localhost`, `http://localhost:8100` for `ionic serve`); change with `API_CORS_ORIGINS`. Tokens are signed with a key generated in `data/.api_secret` (or `API_SECRET`).
 
@@ -156,9 +156,10 @@ HA is also the long-term plan for the house layout: phase 2 will map the Tapo de
 
 ## Camera recordings (FTP)
 
-The film icon on a camera opens its recordings, read from the camera's FTP server (yi-hack's `record/` folder: hour folders such as `2026Y10M09D14H/` holding clips such as `05M00S60.mp4`).
+The film icon on a camera opens its recordings, read from the camera's FTP server (yi-hack's `record/` folder: hour folders such as `2026Y10M09D14H/` holding clips such as `05M00S60.mp4`). The mobile app has the same browser, plus a full-screen live view that turns to landscape on a portrait phone.
 
-- Pick a day and hour on the left, then click a clip. **Prev/Next** (or ← →) step through clips, crossing into the next hour. **Play continuously** goes on to the next clip by itself.
+- Pick a day, then an hour, then a clip — every clip shows a preview frame. **Prev/Next** (or ← →) step through clips, crossing into the next hour. **Play continuously** goes on to the next clip by itself.
 - The backend streams clips from FTP with HTTP range support, so seeking works. At most 3 FTP connections are open at once.
-- Settings (all optional): `CAMERA_FTP_USER` (default `root`), `CAMERA_FTP_PASS` (default empty), `CAMERA_RECORD_DIR` (detected automatically).
+- Previews come from the camera's sidecar `.jpg` when it saves one; otherwise the server extracts a frame with ffmpeg (reading over FTP, so only a few hundred KB move) and caches it under `data/cache/thumbs/`.
+- Settings (all optional): `CAMERA_FTP_USER` (default `root`), `CAMERA_FTP_PASS` (default empty), `CAMERA_RECORD_DIR` (detected automatically), `CAMERA_FTP_PORT` (default 21).
 - Troubleshooting: `GET /api/debug/camera-ftp/<camera-id>` shows what the FTP server exposes.

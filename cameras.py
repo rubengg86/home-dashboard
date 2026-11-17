@@ -42,6 +42,7 @@ class Camera:
             user=ftp.get("user") or (self.auth[0] if self.auth else "root"),
             password=ftp.get("password") if ftp.get("password") is not None else (self.auth[1] if self.auth else ""),
             root=ftp.get("root") or None,
+            port=int(ftp.get("port") or 21),
         )
 
     def rtsp_url(self, quality: str, with_auth: bool = True) -> str:

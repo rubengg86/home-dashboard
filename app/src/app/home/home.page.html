@@ -126,10 +126,17 @@
   @if (live.cameras().cameras.length) {
     <div class="section-title">Cameras</div>
     @for (c of live.cameras().cameras; track c.id) {
-      <button class="cam" type="button" (click)="openCamera(c)" [attr.aria-label]="'Open live video, ' + c.name">
-        <app-camera-snapshot [camId]="c.id" [name]="c.name"></app-camera-snapshot>
-        <span class="cam-label"><ion-icon name="videocam-outline"></ion-icon> {{ c.name }}</span>
-      </button>
+      <div class="cam">
+        <button class="cam-open" type="button" (click)="openCamera(c)" [attr.aria-label]="'Open live video, ' + c.name">
+          <app-camera-snapshot [camId]="c.id" [name]="c.name"></app-camera-snapshot>
+          <span class="cam-label"><ion-icon name="videocam-outline"></ion-icon> {{ c.name }}</span>
+        </button>
+        @if (c.recordings) {
+          <button class="cam-recs" type="button" (click)="openRecordings(c)" [attr.aria-label]="'Recordings of ' + c.name">
+            <ion-icon name="film-outline"></ion-icon>
+          </button>
+        }
+      </div>
     }
   }
 

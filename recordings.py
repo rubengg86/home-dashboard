@@ -13,10 +13,14 @@ import ftplib
 import logging
 import posixpath
 import re
+import shutil
+import subprocess
 import threading
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Iterator
+from urllib.parse import quote
 
 log = logging.getLogger("tapo.recordings")
 
@@ -173,6 +177,32 @@ class FtpRecordings:
                     c and c.close()  # closing mid-transfer aborts it; fine for range requests
                 except Exception:  # noqa: BLE001
                     pass
+            self._slots.release()
+
+    def thumbnail(self, path: str, out: Path, width: int = 400) -> None:
+        """Extract the clip's first frame into `out` (jpg). ffmpeg reads straight over FTP
+        and seeks with REST, so only the header and one keyframe move over the wire."""
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise FileNotFoundError("ffmpeg is not installed on the server")
+        with self._session() as ftp:
+            full = self._abs(ftp, path)  # also resolves/caches the recordings root
+        url = (f"ftp://{quote(self.user, safe='')}:{quote(self.password, safe='')}"
+               f"@{self.host}:{self.port}{quote(full)}")
+        self._acquire()  # ffmpeg opens its own sessions; keep the camera's ftpd within its limits
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_suffix(".tmp.jpg")
+            proc = subprocess.run(
+                [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-rw_timeout", "15000000",
+                 "-i", url, "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "6", "-y", str(tmp)],
+                capture_output=True, timeout=45)
+            if proc.returncode != 0 or not tmp.exists() or not tmp.stat().st_size:
+                tmp.unlink(missing_ok=True)
+                err = proc.stderr.decode(errors="replace").strip().splitlines()
+                raise RuntimeError(err[-1] if err else "ffmpeg could not read the clip")
+            tmp.replace(out)
+        finally:
             self._slots.release()
 
     def debug(self) -> dict:

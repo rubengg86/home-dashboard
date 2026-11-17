@@ -75,3 +75,6 @@ ion-tab-bar { border-top: 1px solid var(--app-line); }
 }
 .err { font-size: 13px; color: var(--app-bad); margin-top: 8px; }
 .tnum { font-variant-numeric: tabular-nums; }
+
+/* edge-to-edge live video: no card inset, so the rotated (landscape) view can fill the screen */
+ion-modal.cam-full { --width: 100%; --height: 100%; --border-radius: 0; }

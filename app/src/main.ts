@@ -12,7 +12,8 @@ import { provideServiceWorker } from '@angular/service-worker';
 bootstrapApplication(AppComponent, {
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    provideIonicAngular(),
+    // useSetInputAPI: modal componentProps must go through setInput, or they clobber signal inputs
+    provideIonicAngular({ useSetInputAPI: true }),
     provideHttpClient(withInterceptors([authInterceptor])),
     provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()), provideServiceWorker('ngsw-worker.js', {
             enabled: !isDevMode(),

@@ -6,7 +6,7 @@ import {
 } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
-  chevronDownOutline, chevronUpOutline, flame, personCircleOutline, shirtOutline,
+  chevronDownOutline, chevronUpOutline, filmOutline, flame, personCircleOutline, shirtOutline,
   thermometerOutline, videocamOutline, waterOutline,
 } from 'ionicons/icons';
 import { AuthService } from '../core/auth.service';
@@ -14,6 +14,7 @@ import { eventLabel, fmtTemp, hhmm, minutesUntil, timeAgo } from '../core/format
 import { LiveService } from '../core/live.service';
 import { Camera, Heater, Radiator } from '../core/models';
 import { CameraLiveComponent } from '../shared/camera-live.component';
+import { CameraRecordingsComponent } from '../shared/camera-recordings.component';
 import { CameraSnapshotComponent } from '../shared/camera-snapshot.component';
 import { UiService } from '../shared/ui.service';
 import { BUILD } from '../../environments/version';
@@ -46,7 +47,7 @@ export class HomePage {
   readonly running = computed(() => this.live.appliances().appliances.filter((a) => a.status !== 'Off'));
 
   constructor() {
-    addIcons({ chevronDownOutline, chevronUpOutline, flame, personCircleOutline, shirtOutline,
+    addIcons({ chevronDownOutline, chevronUpOutline, filmOutline, flame, personCircleOutline, shirtOutline,
                thermometerOutline, videocamOutline, waterOutline });
     setInterval(() => this.now.set(Date.now()), 30_000);  // keeps "x min left" fresh
   }
@@ -88,7 +89,16 @@ export class HomePage {
   }
 
   async openCamera(c: Camera): Promise<void> {
-    const m = await this.modals.create({ component: CameraLiveComponent, componentProps: { camId: c.id, name: c.name } });
+    const m = await this.modals.create({
+      component: CameraLiveComponent,
+      componentProps: { camId: c.id, name: c.name, recordings: c.recordings },
+      cssClass: 'cam-full',
+    });
+    await m.present();
+  }
+
+  async openRecordings(c: Camera): Promise<void> {
+    const m = await this.modals.create({ component: CameraRecordingsComponent, componentProps: { camId: c.id, name: c.name } });
     await m.present();
   }
 

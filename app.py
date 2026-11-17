@@ -70,7 +70,8 @@ cameras = CameraManager(
     live_max_width=int(os.getenv("LIVE_MAX_WIDTH", "1280")),
     ftp={"user": os.getenv("CAMERA_FTP_USER") or None,
          "password": os.getenv("CAMERA_FTP_PASS"),
-         "root": os.getenv("CAMERA_RECORD_DIR") or None},
+         "root": os.getenv("CAMERA_RECORD_DIR") or None,
+         "port": os.getenv("CAMERA_FTP_PORT") or None},
 )
 smartthings = None
 _st_auth = None
@@ -258,7 +259,7 @@ class Auth:
     and the PWA shell under /app (static files only; everything it calls needs a token)."""
 
     OPEN = {"/healthz", "/api/v1/auth/login", "/api/v1/auth/refresh"}
-    STREAM = re.compile(r"^/api(/v1)?/(ws|cameras/[^/]+/(live|snapshot|recordings/file))$")
+    STREAM = re.compile(r"^/api(/v1)?/(ws|cameras/[^/]+/(live|snapshot|recordings/(file|thumb)))$")
 
     def __init__(self, app, user: str, password: str, tokens: TokenStore) -> None:
         self.app, self.tokens = app, tokens
@@ -703,6 +704,45 @@ async def recordings_file(cam_id: str, path: str, request: Request):
         return StreamingResponse(rec.stream(path, start, length), status_code=206, media_type=media, headers=headers)
     headers["Content-Length"] = str(total)
     return StreamingResponse(rec.stream(path, 0, total), media_type=media, headers=headers)
+
+
+_thumb_failed: dict[tuple[str, str], float] = {}  # (cam, path) -> when ffmpeg last gave up on it
+_thumb_count = 0
+
+
+def _prune_thumbs(cache: Path, keep: int = 6000) -> None:
+    """Drop the oldest cached previews when the folder grows past ~80 MB worth."""
+    files = sorted(cache.glob("*.jpg"), key=lambda f: f.stat().st_mtime)
+    for f in files[: max(0, len(files) - keep)]:
+        f.unlink(missing_ok=True)
+
+
+@api.get("/cameras/{cam_id}/recordings/thumb")
+async def recordings_thumb(cam_id: str, path: str):
+    """A preview frame of a clip, extracted with ffmpeg and cached on disk. Clips the camera
+    saved a sidecar .jpg for don't need this: the listing points at it and /file serves it."""
+    rec = _recs(cam_id)
+    if not re.fullmatch(r"[\w .-]+(/[\w .-]+)*\.(mp4|h264)", path, re.I):
+        raise HTTPException(400, "invalid clip path")
+    cache = DATA / "cache" / "thumbs" / re.sub(r"[^\w-]", "_", cam_id)
+    out = cache / (path.replace("/", "__") + ".jpg")
+    if not out.exists():
+        key = (cam_id, path)
+        if asyncio.get_running_loop().time() - _thumb_failed.get(key, -1e9) < 600:
+            raise HTTPException(404, "no preview for this clip")
+        try:
+            await _ftp(rec.thumbnail, path, out)
+        except HTTPException:
+            _thumb_failed[key] = asyncio.get_running_loop().time()
+            raise
+        if len(_thumb_failed) > 2000:
+            _thumb_failed.clear()
+        global _thumb_count
+        _thumb_count += 1
+        if _thumb_count % 100 == 0:
+            await asyncio.to_thread(_prune_thumbs, cache)
+    return FileResponse(out, media_type="image/jpeg",
+                        headers={"Cache-Control": "private, max-age=604800"})
 
 
 @api.get("/debug/camera-ftp/{cam_id}")

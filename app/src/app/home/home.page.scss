@@ -13,9 +13,13 @@ ion-toggle { --track-background-checked: var(--app-on); }
 .bar { height: 6px; border-radius: 999px; background: var(--app-card-2); overflow: hidden; margin-top: 12px;
   i { display: block; height: 100%; background: var(--app-on); border-radius: 999px; transition: width .4s; } }
 
-.cam { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; margin-bottom: 12px; }
-.cam-label { position: absolute; left: 10px; bottom: 10px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12.5px;
-  padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+.cam { position: relative; margin-bottom: 12px; }
+.cam-open { display: block; width: 100%; padding: 0; border: 0; background: none; }
+.cam-label { position: absolute; left: 10px; bottom: 10px; background: #0009; color: #fff; font-size: 12.5px;
+  padding: 4px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 6px; }
+.cam-recs { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border-radius: 10px; border: 0;
+  background: #0009; color: #fff; display: grid; place-items: center;
+  ion-icon { font-size: 18px; } }
 
 .acc { width: 100%; background: none; border: 0; padding: 0; text-align: left; font: inherit;
   font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em;
