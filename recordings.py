@@ -39,8 +39,8 @@ class FtpRecordings:
         self._slots = threading.BoundedSemaphore(max_connections)  # busybox ftpd dislikes many sessions
 
     # ---------------------------------------------------------------- ftp plumbing (blocking)
-    def _acquire(self) -> None:
-        if not self._slots.acquire(timeout=20):
+    def _acquire(self, timeout: float = 20) -> None:
+        if not self._slots.acquire(timeout=timeout):
             raise TimeoutError("camera FTP busy, try again")
 
     @contextmanager
@@ -159,6 +159,13 @@ class FtpRecordings:
     def stream(self, path: str, start: int = 0, length: int | None = None) -> Iterator[bytes]:
         """Yield bytes [start, start+length) of a file. Runs in Starlette's threadpool."""
         self._acquire()
+        try:
+            yield from self._stream(path, start, length)
+        finally:
+            self._slots.release()
+
+    def _stream(self, path: str, start: int = 0, length: int | None = None) -> Iterator[bytes]:
+        """The transfer itself; the caller holds a connection slot."""
         ftp = conn = None
         try:
             ftp = self._open()
@@ -177,11 +184,13 @@ class FtpRecordings:
                     c and c.close()  # closing mid-transfer aborts it; fine for range requests
                 except Exception:  # noqa: BLE001
                     pass
-            self._slots.release()
 
     def thumbnail(self, path: str, out: Path, width: int = 400) -> None:
-        """Extract the clip's first frame into `out` (jpg). ffmpeg reads straight over FTP
-        and seeks with REST, so only the header and one keyframe move over the wire."""
+        """Extract a frame of the clip into `out` (jpg). ffmpeg first reads straight over FTP
+        (it seeks with REST, so only the header and one keyframe move); some camera ftpds
+        won't serve ffmpeg, so on failure the clip is downloaded over our own FTP session
+        and decoded locally. Raises TimeoutError when the camera is busy (transient) and
+        RuntimeError when the clip genuinely can't be decoded."""
         ffmpeg = shutil.which("ffmpeg")
         if not ffmpeg:
             raise FileNotFoundError("ffmpeg is not installed on the server")
@@ -189,21 +198,45 @@ class FtpRecordings:
             full = self._abs(ftp, path)  # also resolves/caches the recordings root
         url = (f"ftp://{quote(self.user, safe='')}:{quote(self.password, safe='')}"
                f"@{self.host}:{self.port}{quote(full)}")
-        self._acquire()  # ffmpeg opens its own sessions; keep the camera's ftpd within its limits
+        out.parent.mkdir(parents=True, exist_ok=True)
+        # a clip grid asks for dozens at once: queue patiently instead of giving up at 20 s
+        self._acquire(timeout=90)  # ffmpeg opens its own sessions; stay within the ftpd's limits
         try:
-            out.parent.mkdir(parents=True, exist_ok=True)
-            tmp = out.with_suffix(".tmp.jpg")
-            proc = subprocess.run(
-                [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-rw_timeout", "15000000",
-                 "-i", url, "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "6", "-y", str(tmp)],
-                capture_output=True, timeout=45)
-            if proc.returncode != 0 or not tmp.exists() or not tmp.stat().st_size:
-                tmp.unlink(missing_ok=True)
-                err = proc.stderr.decode(errors="replace").strip().splitlines()
-                raise RuntimeError(err[-1] if err else "ffmpeg could not read the clip")
-            tmp.replace(out)
+            err = self._extract(ffmpeg, url, out, width)
+            if err is None:
+                return
+            log.info("Thumbnail %s: ffmpeg over FTP failed (%s), downloading the clip", path, err)
+            clip = out.with_suffix(".clip.tmp")
+            try:
+                with clip.open("wb") as f:
+                    for chunk in self._stream(path):
+                        f.write(chunk)
+                err = self._extract(ffmpeg, str(clip), out, width)
+                if err is not None:
+                    raise RuntimeError(err)
+            finally:
+                clip.unlink(missing_ok=True)
         finally:
             self._slots.release()
+
+    @staticmethod
+    def _extract(ffmpeg: str, src: str, out: Path, width: int) -> str | None:
+        """One ffmpeg run, src -> out jpg. Returns None on success, the error line otherwise."""
+        tmp = out.with_suffix(".tmp.jpg")
+        try:
+            proc = subprocess.run(
+                [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-rw_timeout", "15000000",
+                 "-i", src, "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "6", "-y", str(tmp)],
+                capture_output=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            tmp.unlink(missing_ok=True)
+            return "ffmpeg timed out"
+        if proc.returncode != 0 or not tmp.exists() or not tmp.stat().st_size:
+            tmp.unlink(missing_ok=True)
+            lines = proc.stderr.decode(errors="replace").strip().splitlines()
+            return lines[-1] if lines else f"ffmpeg exited {proc.returncode}"
+        tmp.replace(out)
+        return None
 
     def debug(self) -> dict:
         """What the FTP server looks like, to troubleshoot an unusual layout."""

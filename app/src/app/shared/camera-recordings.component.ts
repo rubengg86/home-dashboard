@@ -60,7 +60,7 @@ interface RecDay { day: string; hours: number[] }
           <div class="grid">
             @for (c of clips(); track c.path; let k = $index) {
               <button class="clip" [class.active]="k === clipIdx()" (click)="play(k)" [attr.aria-label]="'Play the ' + c.label + ' clip'">
-                <img loading="lazy" alt="" [src]="thumbSrc(c)" (error)="$any($event.target).style.display = 'none'">
+                <img loading="lazy" alt="" [src]="thumbSrc(c)" (error)="thumbError($event, c)">
                 <span class="lbl">{{ c.label }}<span>{{ dur(c.duration) }}</span></span>
               </button>
             }
@@ -129,6 +129,15 @@ export class CameraRecordingsComponent implements OnInit {
   }
 
   thumbSrc(c: RecClip): string { return this.mediaURL(c.thumb ? 'file' : 'thumb', c.thumb || c.path); }
+
+  /** A busy camera answers 503 for a while: retry a few times before hiding the tile. */
+  thumbError(ev: Event, c: RecClip): void {
+    const img = ev.target as HTMLImageElement;
+    const n = +(img.dataset['try'] || 0) + 1;
+    if (n > 3) { img.style.display = 'none'; return; }
+    img.dataset['try'] = String(n);
+    setTimeout(() => { if (img.isConnected) img.src = `${this.thumbSrc(c)}&r=${n}`; }, 5000 * n);
+  }
 
   async load(): Promise<void> {
     const seq = ++this.seq;

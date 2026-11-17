@@ -731,10 +731,16 @@ async def recordings_thumb(cam_id: str, path: str):
         if asyncio.get_running_loop().time() - _thumb_failed.get(key, -1e9) < 600:
             raise HTTPException(404, "no preview for this clip")
         try:
-            await _ftp(rec.thumbnail, path, out)
-        except HTTPException:
+            await asyncio.to_thread(rec.thumbnail, path, out)
+        except TimeoutError:  # transient (camera busy): retryable, so not memoised
+            raise HTTPException(503, "camera FTP busy, retry shortly",
+                                headers={"Retry-After": "10"})
+        except PermissionError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:  # noqa: BLE001 - this clip really can't be decoded
             _thumb_failed[key] = asyncio.get_running_loop().time()
-            raise
+            log.warning("Thumbnail %s/%s failed: %s", cam_id, path, e)
+            raise HTTPException(502, f"Camera FTP: {e}")
         if len(_thumb_failed) > 2000:
             _thumb_failed.clear()
         global _thumb_count

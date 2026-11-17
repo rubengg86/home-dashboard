@@ -1101,6 +1101,15 @@ const recBase = () => `/api/cameras/${encodeURIComponent(rec.cam.id)}/recordings
 const fileURL = (path) => `${recBase()}/file?path=${encodeURIComponent(path)}`;
 const thumbURL = (path) => `${recBase()}/thumb?path=${encodeURIComponent(path)}`;
 
+// a busy camera answers 503 for a while: retry a few times before giving the tile up
+function thumbRetry(img) {
+  const n = (+img.dataset.try || 0) + 1;
+  if (n > 3) return img.remove();
+  img.dataset.try = n;
+  const src = img.src.replace(/&r=\d+$/, "");
+  setTimeout(() => { if (img.isConnected) img.src = `${src}&r=${n}`; }, 5000 * n);
+}
+
 function dayLabel(iso) {
   if (!iso) return "Other";
   const d = new Date(iso + "T00:00:00"), today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1175,7 +1184,7 @@ async function selectHour(i, then) {
     if (!clips.length) { $("#recsclips").innerHTML = `<div class="rmsg">No clips in this hour.</div>`; return; }
     $("#recsclips").innerHTML = clips.map((c, k) => `
       <button class="rclip" data-clip="${k}" title="${esc(c.name)}">
-        <img loading="lazy" alt="" src="${c.thumb ? fileURL(c.thumb) : thumbURL(c.path)}" onerror="this.remove()">
+        <img loading="lazy" alt="" src="${c.thumb ? fileURL(c.thumb) : thumbURL(c.path)}" onerror="thumbRetry(this)">
         <span class="lbl">${esc(c.label)}<span>${esc(fmtDur(c.duration))}</span></span>
       </button>`).join("");
     if (then === "first") playClip(0);
